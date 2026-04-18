@@ -178,7 +178,7 @@ bad_circuits.txt
 *.pdf
 
 # setuptools_scm generated version file
-qpandalite/_version.py
+uniq/_version.py
 
 # CMake build artifacts
 QPandaLiteCpp/CMakeCache.txt
