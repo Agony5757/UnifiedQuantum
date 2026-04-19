@@ -274,7 +274,10 @@ persistence.clear_completed()
 
 ### 存储位置
 
-任务数据默认存储在 `~/.uniqc/tasks/` 目录下的 JSONL 文件中。
+任务数据默认存储在 `~/.uniqc/cache/tasks.sqlite` 单一 SQLite 数据库中。数据库使用
+`PRAGMA application_id`（常量值 `"UNIC"`）校验文件归属，并通过 `PRAGMA user_version`
+维护 schema 版本；打开时如发现新版本会自动按 `uniqc.task.store.MIGRATIONS` 顺序迁移。
+可通过向 `TaskPersistence(cache_dir=...)` 或 `TaskStore(cache_dir=...)` 传入其他路径覆盖默认位置。
 
 ## 错误处理 {#guide-task-manager-error-handling}
 

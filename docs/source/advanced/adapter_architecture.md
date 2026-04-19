@@ -285,7 +285,7 @@ from uniqc.task.config import (
 )
 
 config = load_originq_config()
-api_key = config['api_token']
+api_key = config['api_key']  # OriginQ 配置以 api_key 为主键
 ```
 
 ## 实现自定义适配器 {#advanced-adapter-custom}
