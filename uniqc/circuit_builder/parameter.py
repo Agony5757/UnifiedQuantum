@@ -8,7 +8,8 @@ This module provides:
 These classes enable symbolic expressions for gate parameters that can be
 bound to concrete values at execution time.
 
-Example usage:
+Example usage::
+
     theta = Parameter("theta")
     phi = Parameter("phi")
 

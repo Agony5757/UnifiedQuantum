@@ -6,7 +6,8 @@ This module provides:
 - QReg: Named quantum register with indexing and slicing support
 - QRegSlice: Slice view of a QReg for multi-qubit operations
 
-Example usage:
+Example usage::
+
     qr = QReg(name="a", size=4, base_index=0)
     q0 = qr[0]           # Qubit(name="a[0]", index=0, base_index=0)
     q_slice = qr[1:3]    # QRegSlice with qubits at indices 1, 2

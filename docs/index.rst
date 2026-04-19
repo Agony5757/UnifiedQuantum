@@ -1,7 +1,7 @@
 .. UnifiedQuantum documentation master file
 
 UnifiedQuantum — 轻量级量子计算框架
-================================
+======================================
 
 UnifiedQuantum 是一个 Python 原生、轻量且强调透明性的量子计算框架，提供量子线路构建、本地模拟、多平台任务提交，以及 OriginIR / OpenQASM 2.0 格式支持。
 

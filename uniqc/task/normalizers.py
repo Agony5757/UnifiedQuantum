@@ -7,7 +7,8 @@ has its own normalizer that handles the unique output format of that platform.
 The normalizers are used by the adapter classes to ensure consistent
 result handling across all platforms.
 
-Usage:
+Usage::
+
     from uniqc.task.normalizers import normalize_quafu
     from uniqc.task.result_types import UnifiedResult
 

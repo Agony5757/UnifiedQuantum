@@ -6,7 +6,8 @@ to native circuit formats used by different quantum computing platforms:
 - Quafu (pyquafu)
 - IBM (qiskit)
 
-Usage:
+Usage::
+
     from uniqc.circuit_adapter import OriginQCircuitAdapter, QuafuCircuitAdapter, IBMCircuitAdapter
     from uniqc.circuit_builder import Circuit
 

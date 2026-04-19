@@ -203,6 +203,22 @@ html_theme_options = {
 
 suppress_warnings = ["myst.xref_missing"]
 
+# Napoleon: render ``Attributes:`` sections as ``:ivar:`` roles inline instead
+# of standalone ``.. attribute::`` directives. Otherwise autodoc also picks up
+# the class-level ``name: type = ...`` annotations and registers the same
+# attribute twice, producing "duplicate object description" warnings.
+napoleon_use_ivar = True
+
+# Autodoc: ignore ``__all__`` in package ``__init__.py`` files so re-exports are
+# documented only at their canonical submodule location, not also at the
+# package level (which would register each function twice).
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+    "ignore-module-all": True,
+}
+
 # External references (numpy / scipy / torch / python stdlib) are resolved via
 # intersphinx. We source the registry from ``intersphinx-registry`` so URLs
 # stay in sync with the upstream community table rather than hard-coded here.

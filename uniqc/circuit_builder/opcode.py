@@ -44,22 +44,22 @@ def opcode_to_line_originir(opcode: OpcodeType) -> str:
     """
     Convert the given opcode to OriginIR line format.
 
-    opcode is a tuple with the following format:
-    (operation, qubit, cbit, parameter, dagger_flag, control_qubits_set) where:
-        operation (str): The name of the operation.
-        qubit (QubitType): The qubit(s) the operation is applied to.
-        cbit (CbitType): The classical bit(s) the operation stores the result in.
-        parameter (ParameterType): The parameter(s) of the operation.
-        dagger_flag (bool): Whether the operation is daggered.
-        control_qubits_set (set): The set of control qubits.
+    ``opcode`` is a tuple with layout
+    ``(operation, qubit, cbit, parameter, dagger_flag, control_qubits_set)``:
 
-    QubitType = Union[List[int], int]
-    CbitType = Union[List[int], int]
-    ParameterType = Optional[Union[List[float], float]]
+    - ``operation`` (``str``): name of the operation.
+    - ``qubit`` (``QubitType``): qubit(s) the operation is applied to.
+    - ``cbit`` (``CbitType``): classical bit(s) the result is stored in.
+    - ``parameter`` (``ParameterType``): parameter(s) of the operation.
+    - ``dagger_flag`` (``bool``): whether the operation is daggered.
+    - ``control_qubits_set`` (``set``): set of control qubits.
 
-    and
+    Type aliases used above::
 
-    OpcodeType = Tuple[str, QubitType, CbitType, ParameterType, set, bool]
+        QubitType     = Union[List[int], int]
+        CbitType      = Union[List[int], int]
+        ParameterType = Optional[Union[List[float], float]]
+        OpcodeType    = Tuple[str, QubitType, CbitType, ParameterType, set, bool]
 
     Args:
         opcode (OpcodeType): The given opcode to be converted.

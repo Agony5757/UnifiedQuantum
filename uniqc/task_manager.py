@@ -10,7 +10,8 @@ Environment Variables:
         When enabled, all task submissions use local simulation instead
         of real quantum backends. Useful for development and testing.
 
-Usage:
+Usage::
+
     from uniqc.task_manager import submit_task, query_task, wait_for_result
     from uniqc.circuit_builder import Circuit
     from uniqc.backend import get_backend

@@ -165,8 +165,8 @@ def decompose_mcx_qasm_text(controls: List[int], target: int, qubit_num: int) ->
 
     Uses a clean-ancilla ladder (Barenco et al. 1995, adapted): n-2 workspace
     qubits are borrowed from existing circuit qubits not involved in the gate.
-    The workspace qubits must be in state |0⟩ at the call site; they are
-    restored to |0⟩ after the decomposition.
+    The workspace qubits must be in state ``|0⟩`` at the call site; they are
+    restored to ``|0⟩`` after the decomposition.
 
     Args:
         controls: Ordered list of n ≥ 4 control qubit indices.
@@ -404,6 +404,7 @@ def decompose_mcu_qasm_text(
     """Decompose an n-control single-qubit gate into QASM 2.0 statements.
 
     Uses two strategies:
+
     - **Tier 1 (conjugation, 1 MCX)**: For gates where G = U·X·U†.
       Supported: X, Z, Y, S, Sdg, RZ, RX, U1.
     - **Tier 2 (ABC method, 2 MCX)**: For gates requiring the general

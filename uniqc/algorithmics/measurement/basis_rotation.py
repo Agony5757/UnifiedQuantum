@@ -33,22 +33,19 @@ def basis_rotation_measurement(
     Args:
         circuit: Quantum circuit (must contain MEASURE instructions).
         qubits: Indices of qubits to include.  ``None`` means all qubits.
-        basis: Per-qubit measurement basis.  Can be:
-
-            - A single string such as ``"XYZ"`` (applied left-to-right to
-              ``qubits``), where each character is ``"I"``, ``"X"``, ``"Y"``,
-              or ``"Z"``.
-            - A list of strings such as ``["X", "Y", "Z"]``.
-            - ``None`` (default), which means all qubits use the Z basis.
-
+        basis: Per-qubit measurement basis.  Accepts a single string such as
+            ``"XYZ"`` (applied left-to-right to ``qubits``, with each
+            character one of ``"I"`` / ``"X"`` / ``"Y"`` / ``"Z"``), a list
+            of strings such as ``["X", "Y", "Z"]``, or ``None`` (default,
+            Z basis for all qubits).
         shots: Number of measurement shots.  ``None`` returns the exact
             probability vector from the statevector simulator.
 
     Returns:
-        - If ``shots`` is ``None``: a ``dict`` mapping each computational-basis
-          outcome string (e.g. ``"01"``) to its probability.
-        - If ``shots`` is given: a ``dict`` mapping outcome strings to
-          integer counts (frequency).
+        When ``shots`` is ``None``, a ``dict`` mapping each computational-basis
+        outcome string (e.g. ``"01"``) to its probability.  When ``shots`` is
+        given, a ``dict`` mapping outcome strings to integer counts
+        (frequency).
 
     Raises:
         ValueError: ``len(basis)`` does not match ``len(qubits)``.
