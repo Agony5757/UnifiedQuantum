@@ -46,12 +46,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install setuptools wheel
+          pip install cmake setuptools wheel
           pip install -r docs/requirements.txt
 
-      - name: Install package (no C++ extension)
+      - name: Install package
         run: |
-          python setup.py develop --no-cpp
+          pip install -e . --no-build-isolation
 
       - name: Build docs
         run: |

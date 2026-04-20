@@ -10,12 +10,6 @@
 pip install unified-quantum
 ```
 
-### 从 conda 安装
-
-```bash
-conda install -c conda-forge uniqc
-```
-
 ## 安装验证
 
 安装完成后，运行以下命令确认安装成功：
@@ -64,15 +58,14 @@ git submodule update --init --recursive
 #### 构建并安装
 
 ```bash
-# 完整安装（含 C++ 模拟器，需要 CMake）
+# 完整安装（需要 CMake >= 3.26 和 C++17 编译器）
 pip install .
 
-# 纯 Python 版本（不需要 C++ 编译环境）
-pip install . --no-cpp
-
-# 开发模式（可编辑源码）
-pip install -e .
+# 开发模式（可编辑源码，需使用 pip 安装的 cmake）
+pip install -e . --no-build-isolation
 ```
+
+> **注意：** 从源码构建时 C++ 模拟器为必需组件。如果系统 CMake 版本过低（< 3.26），请先运行 `pip install cmake --upgrade`。
 
 ### 构建 C++ 扩展常见问题
 

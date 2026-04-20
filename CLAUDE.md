@@ -13,15 +13,11 @@ The `main` branch is protected — never push directly to it. Always:
 
 ## Project Overview
 
-UnifiedQuantum is a Python-native quantum programming framework for NISQ devices. It provides circuit construction, simulation (local and cloud), and result analysis. The core is pure Python with an optional C++ simulation backend via pybind11.
+UnifiedQuantum is a Python-native quantum programming framework for NISQ devices. It provides circuit construction, simulation (local and cloud), and result analysis. The core includes a C++ simulation backend compiled via pybind11.
 
 ## Build Commands
 
 ```bash
-# Pure Python install (no C++ dependencies)
-pip install . --no-cpp
-
-# Full install with C++ simulator
 # Requirements: git submodules, CMake >= 3.26, C++ compiler with C++17 support
 git clone --recurse-submodules https://github.com/IAI-USTC-Quantum/UnifiedQuantum.git
 
@@ -82,7 +78,7 @@ Pre-commit hooks are configured (ruff lint + format, YAML check, trailing whites
 2. **Simulators** (`uniqc/simulator/`): Local simulation backends that consume OriginIR or QASM strings.
    - `OriginIR_Simulator` — primary simulator supporting statevector, density matrix, and noisy simulation
    - `QASM_Simulator` — OpenQASM 2.0 simulator
-   - `uniqc_cpp` — C++ extension (optional, pybind11)
+   - `uniqc_cpp` — C++ extension (pybind11)
 
 3. **Parsers** (`uniqc/originir/`, `uniqc/qasm/`): Parse OriginIR and OpenQASM 2.0 assembly strings into structured representations.
 
@@ -94,7 +90,7 @@ Pre-commit hooks are configured (ruff lint + format, YAML check, trailing whites
 
 ### C++ Backend
 
-`UniqcCpp/` contains the C++ simulation backend compiled as a pybind11 extension (`uniqc_cpp`). Dependencies (pybind11 v2.13.6, fmt) are git submodules under `UniqcCpp/Thirdparty/`. The `CMakeExtension` class in `setup.py` handles CMake-based compilation. Building without C++ uses `pip install . --no-cpp`.
+`UniqcCpp/` contains the C++ simulation backend compiled as a pybind11 extension (`uniqc_cpp`). Dependencies (pybind11 v2.13.6, fmt) are git submodules under `UniqcCpp/Thirdparty/`. The `CMakeExtension` class in `setup.py` handles CMake-based compilation.
 
 ## Releasing
 
