@@ -12,19 +12,6 @@ import os
 import subprocess
 import sys
 
-BUILD_WITH_CPP = True
-
-# see if user passes any args to the setup
-filtered_args = []
-for i, arg in enumerate(sys.argv):
-    if arg == '--no-cpp':
-        BUILD_WITH_CPP = False
-        print('Build without C++ support.')
-    else:
-        filtered_args.append(arg)
-
-sys.argv = filtered_args
-
 # Convert distutils Windows platform specifiers to CMake -A arguments
 PLAT_TO_CMAKE = {
     "win32": "Win32",
@@ -126,15 +113,8 @@ class CMakeBuild(build_ext):
         )
 
 
-if BUILD_WITH_CPP:
-    ext_modules = [CMakeExtension("uniqc_cpp")]
-    cmdclass = {"build_ext": CMakeBuild}
-else:
-    ext_modules = []
-    cmdclass = {}
-
 setup(
     packages=find_packages(exclude=["uniqc.test*"]),
-    ext_modules=ext_modules,
-    cmdclass=cmdclass,
+    ext_modules=[CMakeExtension("uniqc_cpp")],
+    cmdclass={"build_ext": CMakeBuild},
 )
