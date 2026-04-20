@@ -83,8 +83,24 @@ def run_test_error_handling():
         print(f"Caught expected error for invalid QASM: {e}")
 
 
-if __name__ == '__main__':
+@uniq_test('Test Transpiler: draw lazy import')
+def test_draw_lazy_import():
+    """Test that draw function can be imported without pyqpanda3."""
+    from uniqc.transpiler import draw
+
+    # Verify it's a callable (the lazy import wrapper)
+    assert callable(draw)
+    print("draw function imported successfully via lazy import")
+
+
+def run_test_transpiler_converter():
+    """Run all transpiler converter tests."""
     run_test_oir_to_qasm()
     run_test_qasm_to_oir()
     run_test_roundtrip()
     run_test_error_handling()
+    test_draw_lazy_import()
+
+
+if __name__ == '__main__':
+    run_test_transpiler_converter()

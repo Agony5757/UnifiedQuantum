@@ -19,16 +19,16 @@
 
 ```bash
 # Grover 搜索
-python examples/algorithms/grover.py --n-qubits 3 --target 5
+python examples/algorithms/grover.py --n-qubits 3 --marked-state 5
 
 # VQE (H2 分子)
-python examples/algorithms/vqe.py --ansatz hea --n-qubits 2
+python examples/algorithms/vqe.py --molecule H2 --maxiter 100
 
 # QAOA (MaxCut)
-python examples/algorithms/qaoa.py --n-qubits 4 --p 2
+python examples/algorithms/qaoa.py -p 2 --maxiter 80
 
 # QPE
-python examples/algorithms/qpe.py --n-qubits 3
+python examples/algorithms/qpe.py --n-precision 4 --unitary t --shots 4096
 ```
 
 ## 文档说明

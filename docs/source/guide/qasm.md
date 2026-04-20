@@ -58,9 +58,9 @@ print(originir_str)
 如果你有外部 QASM 文本（例如从其他工具生成），可以将其转换为 OriginIR：
 
 ```python
-from uniqc.qasm.translate_qasm2_oir import translate_qasm2_to_originir
+from uniqc.transpiler.converter import convert_qasm_to_oir
 
-originir_str = translate_qasm2_to_originir(qasm_str)
+originir_str = convert_qasm_to_oir(qasm_str)
 ```
 
 ### 互转边界

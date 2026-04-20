@@ -12,16 +12,9 @@
 
 ```python
 circuit.depth          # 线路深度
-circuit.circuit_info   # {'qubits': int, 'gates': {...}, 'measurements': [...]}
-```
-
-## 线路分析
-
-```python
-from uniqc.analyzer import analyze_circuit
-
-# 分析线路中的门类型和数量
-info = analyze_circuit(circuit.originir)
+circuit.qubit_num      # 量子比特数
+circuit.cbit_num       # 经典比特数
+circuit.opcode_list    # 门操作列表
 ```
 
 ## 量子比特重映射
@@ -36,10 +29,12 @@ remapped = circuit.remapping({0: 3, 1: 5})
 ## 可视化
 
 ```python
-from uniqc.transpiler.draw import draw_circuit
+from uniqc.transpiler import draw
 
-draw_circuit(circuit)
+draw(circuit.originir)
 ```
+
+> 注意：可视化功能需要安装 `pyqpanda3` 依赖。
 
 ## 线路转译
 

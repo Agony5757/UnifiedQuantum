@@ -111,7 +111,9 @@ qasm_str = circuit.qasm
 ```python
 circuit.depth        # 线路深度
 circuit.circuit      # 完整线路字符串（含头和测量）
-circuit.circuit_info # {'qubits': int, 'gates': {...}, 'measurements': [...]}
+circuit.qubit_num    # 量子比特数
+circuit.cbit_num     # 经典比特数
+circuit.opcode_list  # 门操作列表
 ```
 
 ## 量子比特重映射

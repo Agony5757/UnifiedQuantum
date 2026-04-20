@@ -69,11 +69,11 @@ def _originir_to_qasm(originir: str) -> str:
 
 def _qasm_to_originir(qasm: str) -> str:
     """Convert QASM to OriginIR."""
-    from uniqc.qasm import QASM_Parser
+    from uniqc.qasm import OpenQASM2_BaseParser
 
-    parser = QASM_Parser()
+    parser = OpenQASM2_BaseParser()
     parser.parse(qasm)
-    return parser.originir
+    return parser.to_originir()
 
 
 def _print_info(content: str, fmt: str) -> None:
@@ -85,9 +85,9 @@ def _print_info(content: str, fmt: str) -> None:
         parser.parse(content)
         circuit = parser.to_circuit()
     else:
-        from uniqc.qasm import QASM_Parser
+        from uniqc.qasm import OpenQASM2_BaseParser
 
-        parser = QASM_Parser()
+        parser = OpenQASM2_BaseParser()
         parser.parse(content)
         circuit = parser.to_circuit()
 

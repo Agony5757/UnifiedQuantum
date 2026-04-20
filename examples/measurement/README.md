@@ -14,8 +14,8 @@
 从仓库根目录执行：
 
 ```bash
-python examples/measurement/state_tomography.py --n-qubits 2
-python examples/measurement/shadow_tomography.py --n-qubits 2 --n-shadows 1000
+python examples/measurement/state_tomography.py --n-shots 2000
+python examples/measurement/shadow_tomography.py --n-shots 1000 --n-shadow 100
 ```
 
 ## 参考文献
