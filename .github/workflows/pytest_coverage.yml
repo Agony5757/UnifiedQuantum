@@ -50,6 +50,8 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake ninja-build
+        # Remove system-installed typing_extensions to avoid pip conflict
+        sudo apt-get remove -y python3-typing-extensions 2>/dev/null || true
         pip install setuptools wheel setuptools_scm
 
     - name: Install package (with all optional dependencies and C++ extension)
@@ -61,8 +63,11 @@ jobs:
     - name: Install test dependencies
       run: pip install pytest pytest-cov
 
-    - name: Run tests with coverage
-      run: pytest uniqc/test/ --cov=uniqc --cov-report=term-missing --cov-report=xml -v
+    - name: Run tests without coverage first (avoid dill serialization issue with qiskit+torchquantum)
+      run: pytest uniqc/test/ -v --no-cov
+
+    - name: Run tests with coverage (for coverage report only)
+      run: pytest uniqc/test/ --cov=uniqc --cov-report=term-missing --cov-report=xml -v --no-cov-on-fail || true
 
     - name: Upload coverage report
       if: always()
