@@ -96,8 +96,14 @@ class DummyAdapter(QuantumAdapter):
         """
         from ..optional_deps import MissingDependencyError, check_simulation
 
-        if not check_simulation():
-            raise MissingDependencyError("qutip", "simulation")
+        if not check_simulation("cpp"):
+            raise MissingDependencyError(
+                "uniqc_cpp",
+                install_hint=(
+                    "Reinstall unified-quantum for the current Python version "
+                    "or build the package from source so the C++ simulator extension is available."
+                ),
+            )
 
         self.noise_model = noise_model
         self.available_qubits = available_qubits or []
@@ -267,7 +273,7 @@ class DummyAdapter(QuantumAdapter):
             True if simulation dependencies are installed.
         """
         from ..optional_deps import check_simulation
-        return check_simulation()
+        return check_simulation("cpp")
 
     def clear_cache(self) -> None:
         """Clear the internal result cache."""
