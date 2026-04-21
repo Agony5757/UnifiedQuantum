@@ -84,6 +84,10 @@ UnifiedQuantum 提供原生的 Circuit API，但你也可以使用 Qiskit、Cirq
 
 :doc:`CLI 安装 <source/cli/installation>` | :doc:`本地模拟 <source/cli/simulate>` | :doc:`云端提交 <source/cli/submit>` | :doc:`结果查询 <source/cli/result>` | :doc:`配置管理 <source/cli/config>`
 
+**版本变化**
+
+:doc:`版本与发布说明 <source/releases>` | :doc:`版本变化总览 <source/releases/index>`
+
 **算法示例**
 
 **变分算法** :doc:`VQE <source/algorithm/variational/vqe>` | :doc:`QAOA <source/algorithm/variational/qaoa>` | :doc:`VQD <source/algorithm/variational/vqd>`
@@ -127,6 +131,12 @@ UnifiedQuantum 提供原生的 Circuit API，但你也可以使用 Qiskit、Cirq
    :caption: API 参考
 
    source/uniqc_api
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 版本与发布
+
+   source/releases
 
 Indices and tables
 ==================

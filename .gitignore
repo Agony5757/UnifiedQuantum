@@ -75,6 +75,7 @@ docs/_build/
 docs/source/uniqc.rst
 docs/source/uniqc.*.rst
 !docs/source/uniqc_api.rst
+docs/source/releases/_generated/
 
 # PyBuilder
 .pybuilder/

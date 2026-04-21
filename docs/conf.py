@@ -24,6 +24,36 @@ sys.path.insert(0, os.path.abspath(parent_path))
 import subprocess
 import os
 
+def generate_release_notes():
+    """Generate git-backed release notes used by the docs site."""
+    script_path = parent_path / "scripts" / "generate_release_notes.py"
+    output_path = parent_path / "docs" / "source" / "releases" / "_generated" / "strict_history.md"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not script_path.exists():
+        output_path.write_text(
+            "## 详细变更记录（自动整理）\n\n自动整理脚本缺失，当前无法生成版本变化记录。\n",
+            encoding="utf-8",
+        )
+        return
+
+    try:
+        subprocess.run(
+            [sys.executable, str(script_path), "--output", str(output_path)],
+            cwd=str(parent_path),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as exc:
+        output_path.write_text(
+            "## 详细变更记录（自动整理）\n\n"
+            "版本变化记录整理失败，因此这里只显示占位说明。请检查 `scripts/generate_release_notes.py`。\n",
+            encoding="utf-8",
+        )
+        print(f"[docs] failed to generate release notes: {exc}")
+
 def get_version_from_setuptools_scm(strip_dev=False):
     """Get version from setuptools_scm.
 
@@ -106,6 +136,8 @@ copyright = '2025, IAI-USTC-Quantum'
 author = ', '.join(['IAI-USTC-Quantum'])
 project = 'UnifiedQuantum'
 
+generate_release_notes()
+
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -171,7 +203,7 @@ language = 'zh-CN'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'source/uniqc.test.rst']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'source/uniqc.test.rst', 'source/releases/_generated/*']
 autodoc_typehints = "description"
 source_suffix = {'.rst': 'restructuredtext', '.md': 'markdown'}
 
