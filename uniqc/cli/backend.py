@@ -37,7 +37,9 @@ def _subcommand_given() -> bool:
 @app.callback(invoke_without_command=True)
 def backend(
     show: str | None = typer.Option(
-        None, "--show", "-s",
+        None,
+        "--show",
+        "-s",
         help="Show detailed info for a specific backend (e.g. originq:full_amplitude)",
     ),
 ):
@@ -65,22 +67,50 @@ def backend(
     )
 
 
+def _fmt_fidelity(val: float | None) -> str:
+    """Format a fidelity value as a 5-char string or '-' if unavailable."""
+    if val is None:
+        return "-"
+    return f"{val:.4f}"
+
+
 @app.command("list")
 def list_backends(
     platform: str | None = typer.Option(
-        None, "--platform", "-p",
+        None,
+        "--platform",
+        "-p",
         help="Only show backends for this platform (originq/quafu/ibm)",
     ),
     status_filter: str | None = typer.Option(
-        None, "--status", "-s",
+        None,
+        "--status",
+        "-s",
         help="Filter by status: available, unavailable, deprecated, simulator, hardware",
     ),
+    all: bool = typer.Option(
+        False,
+        "--all",
+        "-a",
+        help="Show all backends including unavailable and deprecated (default: only available backends are shown)",
+    ),
+    info: bool = typer.Option(
+        False,
+        "--info",
+        "-i",
+        help="Show additional backend information (fidelity, coherence times)",
+    ),
     format: str = typer.Option(
-        "table", "--format", "-f",
+        "table",
+        "--format",
+        "-f",
         help="Output format: table (default) or json",
     ),
 ):
-    """List all available backends from configured platforms.
+    """List backends from configured platforms.
+
+    By default only available backends are shown. Use --all to show all backends
+    regardless of status.
 
     Backend data is cached for 24 hours. Use ``uniqc backend update`` to
     force-refresh.
@@ -90,10 +120,7 @@ def list_backends(
         try:
             target_platform = Platform(platform.lower())
         except ValueError:
-            print_error(
-                f"Unknown platform '{platform}'. "
-                f"Valid: {', '.join(p.value for p in Platform)}"
-            )
+            print_error(f"Unknown platform '{platform}'. Valid: {', '.join(p.value for p in Platform)}")
             raise typer.Exit(1)  # noqa: B904
 
     if target_platform:
@@ -116,7 +143,8 @@ def list_backends(
         print_warning("No backends found. Run 'uniqc backend update' to fetch from APIs.")
         raise typer.Exit(0)
 
-    # Apply status filter
+    # Apply status filter: explicit --status takes precedence; otherwise show
+    # only available backends unless --all is given.
     def matches_filter(b: BackendInfo) -> bool:
         if status_filter == "simulator":
             return b.is_simulator
@@ -130,7 +158,8 @@ def list_backends(
             return b.status == "deprecated"
         if status_filter:
             return b.status.lower() == status_filter.lower()
-        return True
+        # Default: show only available backends unless --all is used
+        return all or b.status == "available"
 
     # Build output rows
     rows: list[list[str]] = []
@@ -139,13 +168,28 @@ def list_backends(
         for b in backends:
             if not matches_filter(b):
                 continue
-            rows.append([
-                plat.value,
-                b.name,
-                str(b.num_qubits) if b.num_qubits else "-",
-                b.status,
-                "sim" if b.is_simulator else "hw",
-            ])
+            if info:
+                rows.append(
+                    [
+                        plat.value,
+                        b.name,
+                        str(b.num_qubits) if b.num_qubits else "-",
+                        b.status,
+                        "sim" if b.is_simulator else "hw",
+                        _fmt_fidelity(b.avg_1q_fidelity),
+                        _fmt_fidelity(b.avg_2q_fidelity),
+                    ]
+                )
+            else:
+                rows.append(
+                    [
+                        plat.value,
+                        b.name,
+                        str(b.num_qubits) if b.num_qubits else "-",
+                        b.status,
+                        "sim" if b.is_simulator else "hw",
+                    ]
+                )
             json_data.append(b.to_dict())
 
     if format == "json":
@@ -153,10 +197,14 @@ def list_backends(
         return
 
     if not rows:
-        print_warning(f"No backends match filter '--status {status_filter}'")
+        if status_filter:
+            print_warning(f"No backends match filter '--status {status_filter}'")
+        else:
+            print_warning("No backends match the current filter.")
         return
 
     from rich.table import Table
+
     table = Table(
         title="Available Backends",
         box=rich.box.ROUNDED,
@@ -168,6 +216,10 @@ def list_backends(
     table.add_column("Qubits", justify="right", width=8)
     table.add_column("Status", width=12)
     table.add_column("Type", width=6)
+    if info:
+        table.add_column("1Q Fid.", justify="right", width=9)
+        table.add_column("2Q Fid.", justify="right", width=9)
+
     for row in rows:
         status_style = {
             "available": "green",
@@ -179,10 +231,10 @@ def list_backends(
     console.print(table)
 
     # Show cache status
-    info = cache_info()
-    if info:
+    info_cache = cache_info()
+    if info_cache:
         lines = []
-        for p, meta in info.items():
+        for p, meta in info_cache.items():
             age = meta["age_seconds"]
             stale_marker = " [yellow](stale)[/yellow]" if meta["is_stale"] else ""
             age_str = _format_age(age)
@@ -195,18 +247,22 @@ def list_backends(
 @app.command("update")
 def update(
     platform: str | None = typer.Option(
-        None, "--platform", "-p",
+        None,
+        "--platform",
+        "-p",
         help="Only update backends for this platform (originq/quafu/ibm)",
     ),
     clear: bool = typer.Option(
-        False, "--clear", "-c",
+        False,
+        "--clear",
+        "-c",
         help="Clear cache before updating (force re-fetch all platforms)",
     ),
 ):
     """Force-refresh backend information from cloud APIs.
 
-    By default, ``uniqc backend list`` caches results for 24 hours.
-    Use this command to fetch fresh data immediately.
+    Always bypasses the cache and fetches fresh data from all configured
+    platforms. Use ``uniqc backend list`` to view cached data without refreshing.
     """
 
     if clear:
@@ -219,11 +275,11 @@ def update(
 
     for plat in targets:
         try:
-            backends, fresh = fetch_platform_backends(plat, force_refresh=True)
-            if fresh:
+            backends, _ = fetch_platform_backends(plat, force_refresh=True)
+            if backends:
                 updated_platforms.append(f"{plat.value} ({len(backends)} backends)")
             else:
-                print_warning(f"{plat.value}: no new data available")
+                warnings_list.append(f"{plat.value}: no backends returned")
         except Exception as exc:
             # Warn but don't fail — a single platform being down shouldn't abort
             # the whole update (especially IBM which may be network-restricted).
@@ -293,12 +349,26 @@ def _print_backend_detail(b: BackendInfo) -> None:
     ]
     console.print(Panel("\n".join(overview), title="Overview", box=rich.box.ROUNDED))
 
+    # Fidelity section (only shown if any fidelity data is available)
+    fidelity_rows = [
+        ("Avg. 1Q Fidelity", b.avg_1q_fidelity, "{:.4f}"),
+        ("Avg. 2Q Fidelity", b.avg_2q_fidelity, "{:.4f}"),
+        ("Avg. Readout Fidelity", b.avg_readout_fidelity, "{:.4f}"),
+        ("Avg. T1 (us)", b.coherence_t1, "{:.3f}"),
+        ("Avg. T2 (us)", b.coherence_t2, "{:.3f}"),
+    ]
+    fidelity_data = [(label, fmt.format(val)) for label, val, fmt in fidelity_rows if val is not None]
+    if fidelity_data:
+        fidelity_lines = "\n".join(f"[bold]{label}:[/bold]  {val}" for label, val in fidelity_data)
+        console.print(Panel(fidelity_lines, title="Fidelity & Coherence", box=rich.box.ROUNDED))
+
     if b.description:
         console.print(f"\n[bold]Description:[/bold] {b.description}")
 
     # Topology
     if b.topology:
         from rich.table import Table
+
         topo_table = Table(title="Qubit Topology (edges)", box=rich.box.SIMPLE)
         topo_table.add_column("Qubit U", justify="right")
         topo_table.add_column("Qubit V", justify="right")

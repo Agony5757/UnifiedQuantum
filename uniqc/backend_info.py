@@ -18,6 +18,20 @@ class Platform(Enum):
     IBM = "ibm"
 
 
+# ---------------------------------------------------------------------------
+# OriginQ simulator names — must match what OriginQ Cloud reports.
+# Kept here so both the adapter and registry can share it without a circular
+# import (backend_info has no external dependencies).
+# ---------------------------------------------------------------------------
+ORIGINQ_SIMULATOR_NAMES = frozenset(
+    {
+        "full_amplitude",
+        "partial_amplitude",
+        "single_amplitude",
+    }
+)
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class QubitTopology:
     """Directed edge in a qubit connectivity graph."""
@@ -51,6 +65,12 @@ class BackendInfo:
     is_simulator: bool = False
     is_hardware: bool = False
     extra: dict[str, Any] = dataclasses.field(default_factory=dict)
+    # Fidelity and coherence — None means not available from the platform API
+    avg_1q_fidelity: float | None = None
+    avg_2q_fidelity: float | None = None
+    avg_readout_fidelity: float | None = None
+    coherence_t1: float | None = None  # microseconds
+    coherence_t2: float | None = None  # microseconds
 
     def full_id(self) -> str:
         """Return the globally-unique identifier: ``platform:name``."""
@@ -67,6 +87,11 @@ class BackendInfo:
             "is_simulator": self.is_simulator,
             "is_hardware": self.is_hardware,
             "extra": self.extra,
+            "avg_1q_fidelity": self.avg_1q_fidelity,
+            "avg_2q_fidelity": self.avg_2q_fidelity,
+            "avg_readout_fidelity": self.avg_readout_fidelity,
+            "coherence_t1": self.coherence_t1,
+            "coherence_t2": self.coherence_t2,
         }
 
     @classmethod
@@ -83,6 +108,11 @@ class BackendInfo:
             is_simulator=d.get("is_simulator", False),
             is_hardware=d.get("is_hardware", False),
             extra=d.get("extra", {}),
+            avg_1q_fidelity=d.get("avg_1q_fidelity"),
+            avg_2q_fidelity=d.get("avg_2q_fidelity"),
+            avg_readout_fidelity=d.get("avg_readout_fidelity"),
+            coherence_t1=d.get("coherence_t1"),
+            coherence_t2=d.get("coherence_t2"),
         )
 
 
@@ -109,8 +139,7 @@ def parse_backend_id(identifier: str) -> tuple[Platform, str]:
             platform = Platform(platform_str.strip())
         except ValueError:
             raise ValueError(
-                f"Unknown platform '{platform_str}'. "
-                f"Valid platforms: {', '.join(p.value for p in Platform)}"
+                f"Unknown platform '{platform_str}'. Valid platforms: {', '.join(p.value for p in Platform)}"
             ) from None
         return platform, name.strip()
 
