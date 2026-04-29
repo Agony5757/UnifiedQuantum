@@ -20,6 +20,106 @@ from uniqc.task.adapters.base import (
 from uniqc.task.config import load_ibm_config
 
 
+def _avg(values: list[float]) -> float | None:
+    """Return the arithmetic mean of a list, or None if the list is empty."""
+    return sum(values) / len(values) if values else None
+
+
+def _compute_ibm_fidelity(b: Any) -> dict[str, Any]:
+    """Compute average fidelity and coherence metrics for an IBM backend.
+
+    Uses ``backend.target`` for gate errors and ``backend.qubit_properties``
+    for T1/T2 and readout error. Returns None for all fields on simulators
+    or when the data is unavailable.
+
+    Returns:
+        dict with keys: avg_1q_fidelity, avg_2q_fidelity, avg_readout_fidelity,
+        coherence_t1 (microseconds), coherence_t2 (microseconds).
+    """
+    try:
+        target = b.target
+    except Exception:
+        return {
+            "avg_1q_fidelity": None,
+            "avg_2q_fidelity": None,
+            "avg_readout_fidelity": None,
+            "coherence_t1": None,
+            "coherence_t2": None,
+        }
+
+    if target is None:
+        return {
+            "avg_1q_fidelity": None,
+            "avg_2q_fidelity": None,
+            "avg_readout_fidelity": None,
+            "coherence_t1": None,
+            "coherence_t2": None,
+        }
+
+    # Single-qubit gate fidelity: SX gate error, 1 - error = fidelity
+    sq_errors: list[float] = []
+    try:
+        sx_ops = getattr(target, "instructions", {}).get("sx", {})
+        if hasattr(sx_ops, "items"):
+            for qpair, props in sx_ops.items():
+                if len(qpair) == 1 and props and props.error is not None:
+                    sq_errors.append(props.error)
+    except Exception:
+        pass
+
+    # Two-qubit gate fidelity: CZ (Heron/Nighthawk) or ECR (Eagle)
+    tq_errors: list[float] = []
+    for gname in ("cz", "ecr"):
+        try:
+            ops = getattr(target, "instructions", {}).get(gname, {})
+            if hasattr(ops, "items"):
+                for qpair, props in ops.items():
+                    if len(qpair) == 2 and props and props.error is not None:
+                        tq_errors.append(props.error)
+                if tq_errors:
+                    break
+        except Exception:
+            continue
+
+    # Coherence and readout: qubit_properties gives T1/T2 (seconds)
+    t1s, t2s, ro_errors = [], [], []
+    num_qubits = b.num_qubits
+    try:
+        for q in range(num_qubits):
+            try:
+                qp = b.qubit_properties(q)
+                if qp.t1 is not None:
+                    t1s.append(qp.t1 * 1e6)  # seconds → μs
+                if qp.t2 is not None:
+                    t2s.append(qp.t2 * 1e6)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Readout error from properties if qubit_properties didn't have it
+    try:
+        props = b.properties()
+        if props:
+            for q in range(num_qubits):
+                try:
+                    re = props.readout_error(q)
+                    if re is not None:
+                        ro_errors.append(re)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return {
+        "avg_1q_fidelity": _avg([1 - e for e in sq_errors]) if sq_errors else None,
+        "avg_2q_fidelity": _avg([1 - e for e in tq_errors]) if tq_errors else None,
+        "avg_readout_fidelity": _avg([1 - e for e in ro_errors]) if ro_errors else None,
+        "coherence_t1": _avg(t1s),
+        "coherence_t2": _avg(t2s),
+    }
+
+
 class IBMAdapter(QuantumAdapter):
     """Adapter for IBM Quantum using QiskitRuntimeService.
 
@@ -33,6 +133,7 @@ class IBMAdapter(QuantumAdapter):
     def __init__(self, proxy: dict[str, str] | str | None = None) -> None:
         # Sync YAML tokens → env vars so load_ibm_config() finds IBM_TOKEN.
         from uniqc.config import sync_tokens_to_env
+
         sync_tokens_to_env()
         config = load_ibm_config()
         self._token: str = config["api_token"]
@@ -156,6 +257,10 @@ class IBMAdapter(QuantumAdapter):
             except Exception:
                 pass
 
+            # Fidelity and coherence from backend.target and qubit_properties
+            fidelity = _compute_ibm_fidelity(b)
+            entry.update(fidelity)
+
             raw_backends.append(entry)
 
         return raw_backends
@@ -177,26 +282,18 @@ class IBMAdapter(QuantumAdapter):
 
     def submit(self, circuit: Any, *, shots: int = 1000, **kwargs: Any) -> str:
         raise NotImplementedError(
-            "IBMAdapter.submit is not yet implemented. "
-            "Use the QiskitAdapter for task submission."
+            "IBMAdapter.submit is not yet implemented. Use the QiskitAdapter for task submission."
         )
 
-    def submit_batch(
-        self, circuits: list[Any], *, shots: int = 1000, **kwargs: Any
-    ) -> list[str]:
+    def submit_batch(self, circuits: list[Any], *, shots: int = 1000, **kwargs: Any) -> list[str]:
         raise NotImplementedError(
-            "IBMAdapter.submit_batch is not yet implemented. "
-            "Use the QiskitAdapter for batch submission."
+            "IBMAdapter.submit_batch is not yet implemented. Use the QiskitAdapter for batch submission."
         )
 
     def query(self, taskid: str) -> dict[str, Any]:
-        raise NotImplementedError(
-            "IBMAdapter.query is not yet implemented. "
-            "Use the QiskitAdapter for task queries."
-        )
+        raise NotImplementedError("IBMAdapter.query is not yet implemented. Use the QiskitAdapter for task queries.")
 
     def query_batch(self, taskids: list[str]) -> dict[str, Any]:
         raise NotImplementedError(
-            "IBMAdapter.query_batch is not yet implemented. "
-            "Use the QiskitAdapter for batch queries."
+            "IBMAdapter.query_batch is not yet implemented. Use the QiskitAdapter for batch queries."
         )

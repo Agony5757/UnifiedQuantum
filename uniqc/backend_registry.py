@@ -14,23 +14,11 @@ import logging
 from typing import Any
 
 from uniqc.backend_cache import get_cached_backends, update_cache
-from uniqc.backend_info import BackendInfo, Platform, QubitTopology
+from uniqc.backend_info import ORIGINQ_SIMULATOR_NAMES, BackendInfo, Platform, QubitTopology
 from uniqc.exceptions import BackendError
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Simulators that appear in OriginQ's backend list but carry no qubits.
-# ---------------------------------------------------------------------------
-_ORIGINQ_SIMULATOR_NAMES = frozenset({
-    "full_amplitude",
-    "partial_amplitude",
-    "single_amplitude",
-})
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _clean_quafu_gates(gates: list[str]) -> list[str]:
     """Strip artefacts from Quafu's ``get_valid_gates()`` output.
@@ -51,25 +39,61 @@ def _clean_quafu_gates(gates: list[str]) -> list[str]:
 # Normalisers
 # ---------------------------------------------------------------------------
 
+
 def _normalise_originq(raw: list[dict[str, Any]]) -> list[BackendInfo]:
     """Convert OriginQ ``list_backends()`` output to ``BackendInfo`` objects."""
     results: list[BackendInfo] = []
     for entry in raw:
         name = entry.get("name", "")
         available: bool = entry.get("available", False)
-        is_sim = name in _ORIGINQ_SIMULATOR_NAMES
-        # chip_info() raises for simulators, so is_sim is reliable from the name list
-        results.append(BackendInfo(
-            platform=Platform.ORIGINQ,
-            name=name,
-            description="OriginQ Cloud simulator" if is_sim else "OriginQ Cloud chip",
-            num_qubits=0,
-            topology=(),
-            status="available" if available else "unavailable",
-            is_simulator=is_sim,
-            is_hardware=not is_sim,
-            extra={"available": available},
-        ))
+        is_sim = name in ORIGINQ_SIMULATOR_NAMES
+
+        if is_sim:
+            # Simulators: no chip_info
+            num_qubits = 0
+            topology: tuple[QubitTopology, ...] = ()
+            extra: dict[str, Any] = {"available": available}
+            results.append(
+                BackendInfo(
+                    platform=Platform.ORIGINQ,
+                    name=name,
+                    description="OriginQ Cloud simulator",
+                    num_qubits=num_qubits,
+                    topology=topology,
+                    status="available" if available else "unavailable",
+                    is_simulator=True,
+                    is_hardware=False,
+                    extra=extra,
+                )
+            )
+        else:
+            # Hardware: use chip_info fetched by the adapter
+            num_qubits = entry.get("num_qubits", 0)
+            topo_raw: list[list[int]] = entry.get("topology", [])
+            topology = tuple(QubitTopology(u=e[0], v=e[1]) for e in topo_raw)
+            avail_qubits: list[int] = entry.get("available_qubits", [])
+            extra = {
+                "available": available,
+                "available_qubits": avail_qubits,
+            }
+            results.append(
+                BackendInfo(
+                    platform=Platform.ORIGINQ,
+                    name=name,
+                    description="OriginQ Cloud chip",
+                    num_qubits=num_qubits,
+                    topology=topology,
+                    status="available" if available else "unavailable",
+                    is_simulator=False,
+                    is_hardware=True,
+                    extra=extra,
+                    avg_1q_fidelity=entry.get("avg_1q_fidelity"),
+                    avg_2q_fidelity=entry.get("avg_2q_fidelity"),
+                    avg_readout_fidelity=entry.get("avg_readout_fidelity"),
+                    coherence_t1=entry.get("coherence_t1"),
+                    coherence_t2=entry.get("coherence_t2"),
+                )
+            )
     return results
 
 
@@ -90,21 +114,28 @@ def _normalise_quafu(raw: list[dict[str, Any]]) -> list[BackendInfo]:
             "Obsolete": "deprecated",
         }
         mapped_status = status_map.get(status_str, status_str)
-        results.append(BackendInfo(
-            platform=Platform.QUAFU,
-            name=name,
-            description=f"BAQIS Quafu {num_qubits}-qubit chip",
-            num_qubits=num_qubits,
-            topology=(),
-            status=mapped_status,
-            is_simulator=is_sim,
-            is_hardware=not is_sim,
-            extra={
-                "task_in_queue": entry.get("task_in_queue", 0),
-                "qv": entry.get("qv", 0),
-                "valid_gates": _clean_quafu_gates(entry.get("valid_gates", [])),
-            },
-        ))
+        results.append(
+            BackendInfo(
+                platform=Platform.QUAFU,
+                name=name,
+                description=f"BAQIS Quafu {num_qubits}-qubit chip",
+                num_qubits=num_qubits,
+                topology=(),
+                status=mapped_status,
+                is_simulator=is_sim,
+                is_hardware=not is_sim,
+                extra={
+                    "task_in_queue": entry.get("task_in_queue", 0),
+                    "qv": entry.get("qv", 0),
+                    "valid_gates": _clean_quafu_gates(entry.get("valid_gates", [])),
+                },
+                avg_1q_fidelity=entry.get("avg_1q_fidelity"),
+                avg_2q_fidelity=entry.get("avg_2q_fidelity"),
+                avg_readout_fidelity=entry.get("avg_readout_fidelity"),
+                coherence_t1=entry.get("coherence_t1"),
+                coherence_t2=entry.get("coherence_t2"),
+            )
+        )
     return results
 
 
@@ -127,26 +158,31 @@ def _normalise_ibm(raw: list[dict[str, Any]]) -> list[BackendInfo]:
         }
         # Parse topology edges
         topology_edges: list[dict[str, int]] = cfg.get("coupling_map", [])
-        topology = tuple(
-            QubitTopology(u=int(e[0]), v=int(e[1])) for e in topology_edges
+        topology = tuple(QubitTopology(u=int(e[0]), v=int(e[1])) for e in topology_edges)
+        results.append(
+            BackendInfo(
+                platform=Platform.IBM,
+                name=name,
+                description=entry.get("description", ""),
+                num_qubits=n_qubits,
+                topology=topology,
+                status=status_map.get(status_str.lower(), status_str),
+                is_simulator=is_sim,
+                is_hardware=is_hardware,
+                extra={
+                    "max_shots": cfg.get("max_shots"),
+                    "basis_gates": cfg.get("basis_gates", []),
+                    "memory": cfg.get("memory", False),
+                    "qobd": cfg.get("qobd", False),
+                    "supported_instructions": cfg.get("supported_instructions", []),
+                },
+                avg_1q_fidelity=entry.get("avg_1q_fidelity"),
+                avg_2q_fidelity=entry.get("avg_2q_fidelity"),
+                avg_readout_fidelity=entry.get("avg_readout_fidelity"),
+                coherence_t1=entry.get("coherence_t1"),
+                coherence_t2=entry.get("coherence_t2"),
+            )
         )
-        results.append(BackendInfo(
-            platform=Platform.IBM,
-            name=name,
-            description=entry.get("description", ""),
-            num_qubits=n_qubits,
-            topology=topology,
-            status=status_map.get(status_str.lower(), status_str),
-            is_simulator=is_sim,
-            is_hardware=is_hardware,
-            extra={
-                "max_shots": cfg.get("max_shots"),
-                "basis_gates": cfg.get("basis_gates", []),
-                "memory": cfg.get("memory", False),
-                "qobd": cfg.get("qobd", False),
-                "supported_instructions": cfg.get("supported_instructions", []),
-            },
-        ))
     return results
 
 
@@ -161,19 +197,24 @@ _NORMALISERS = {
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def _build_adapter(platform: Platform):
     """Instantiate the correct adapter for ``platform``."""
     # Sync YAML tokens → env vars so adapters that read from env work correctly.
     from uniqc.config import sync_tokens_to_env
+
     sync_tokens_to_env()
     if platform == Platform.ORIGINQ:
         from uniqc.task.adapters import OriginQAdapter
+
         return OriginQAdapter()
     elif platform == Platform.QUAFU:
         from uniqc.task.adapters import QuafuAdapter
+
         return QuafuAdapter()
     elif platform == Platform.IBM:
         from uniqc.task.adapters.ibm_adapter import IBMAdapter
+
         return IBMAdapter()
     raise ValueError(f"No adapter for platform {platform}")
 
@@ -272,10 +313,7 @@ def find_backend(identifier: str) -> BackendInfo:
             if backend.name == name:
                 return backend
         available = ", ".join(b.name for b in backends) or "(none)"
-        raise ValueError(
-            f"Backend '{name}' not found on platform '{platform.value}'. "
-            f"Available backends: {available}"
-        )
+        raise ValueError(f"Backend '{name}' not found on platform '{platform.value}'. Available backends: {available}")
     except ValueError:
         # Bare name — search all platforms
         for plat in Platform:
@@ -287,6 +325,5 @@ def find_backend(identifier: str) -> BackendInfo:
                 if backend.name == identifier:
                     return backend
         raise ValueError(
-            f"Backend '{identifier}' not found on any platform. "
-            f"Use 'uniqc backend list' to see available backends."
+            f"Backend '{identifier}' not found on any platform. Use 'uniqc backend list' to see available backends."
         ) from None

@@ -14,6 +14,7 @@ import time
 import warnings
 from typing import Any
 
+from uniqc.backend_info import ORIGINQ_SIMULATOR_NAMES
 from uniqc.task.adapters.base import (
     TASK_STATUS_FAILED,
     TASK_STATUS_RUNNING,
@@ -22,6 +23,11 @@ from uniqc.task.adapters.base import (
 )
 from uniqc.task.config import load_originq_config
 from uniqc.task.optional_deps import require
+
+
+def _avg(values: list[float]) -> float | None:
+    """Return the arithmetic mean of a list, or None if the list is empty."""
+    return sum(values) / len(values) if values else None
 
 
 class OriginQAdapter(QuantumAdapter):
@@ -58,9 +64,9 @@ class OriginQAdapter(QuantumAdapter):
     def _ensure_imports(self) -> None:
         """Lazily import pyqpanda3 modules."""
         if self._service is None:
-            pyqpanda3 = require("pyqpanda3", "originq")
-            from pyqpanda3.qcloud import QCloudService, QCloudOptions, QCloudJob, JobStatus, DataBase
+            require("pyqpanda3", "originq")
             from pyqpanda3.intermediate_compiler import convert_originir_string_to_qprog
+            from pyqpanda3.qcloud import DataBase, JobStatus, QCloudJob, QCloudOptions, QCloudService
 
             self._service = QCloudService(api_key=self._api_key)
             self._QCloudOptions = QCloudOptions
@@ -80,15 +86,53 @@ class OriginQAdapter(QuantumAdapter):
     def list_backends(self) -> list[dict[str, Any]]:
         """Return raw OriginQ Cloud backend metadata.
 
-        Calls ``QCloudService.backends()`` which returns a dict
-        mapping backend name to an availability boolean.
+        For each hardware backend (non-simulator), fetches chip_info() to
+        populate qubit count, topology, fidelity, and coherence data.
 
         Returns:
-            List of dicts with keys: ``name``, ``available``.
+            List of dicts with keys: ``name``, ``available``, ``num_qubits``,
+            ``topology`` (list of [u, v] edge pairs), ``available_qubits``,
+            ``avg_1q_fidelity``, ``avg_2q_fidelity``, ``avg_readout_fidelity``,
+            ``coherence_t1``, ``coherence_t2``.
         """
         self._ensure_imports()
         raw: dict[str, bool] = self._service.backends()
-        return [{"name": name, "available": available} for name, available in raw.items()]
+        results: list[dict[str, Any]] = []
+
+        for name, available in raw.items():
+            entry: dict[str, Any] = {"name": name, "available": available}
+
+            if name not in ORIGINQ_SIMULATOR_NAMES:
+                try:
+                    backend = self._service.backend(name)
+                    ci = backend.chip_info()
+                    entry["num_qubits"] = ci.qubits_num()
+                    entry["topology"] = ci.get_chip_topology()
+                    entry["available_qubits"] = ci.available_qubits()
+
+                    # Fidelity and coherence from single/double qubit info
+                    sq_list = ci.single_qubit_info()
+                    entry["avg_1q_fidelity"] = _avg([sq.get_single_gate_fidelity() for sq in sq_list])
+                    entry["avg_readout_fidelity"] = _avg([sq.get_readout_fidelity() for sq in sq_list])
+                    entry["coherence_t1"] = _avg([sq.get_t1() for sq in sq_list])
+                    entry["coherence_t2"] = _avg([sq.get_t2() for sq in sq_list])
+
+                    dq_list = ci.double_qubits_info()
+                    entry["avg_2q_fidelity"] = _avg([dq.get_fidelity() for dq in dq_list]) if dq_list else None
+                except Exception:  # noqa: BLE001
+                    # chip_info() may not be available for all backends
+                    entry["num_qubits"] = 0
+                    entry["topology"] = []
+                    entry["available_qubits"] = []
+                    entry["avg_1q_fidelity"] = None
+                    entry["avg_2q_fidelity"] = None
+                    entry["avg_readout_fidelity"] = None
+                    entry["coherence_t1"] = None
+                    entry["coherence_t2"] = None
+
+            results.append(entry)
+
+        return results
 
     # -------------------------------------------------------------------------
     # Circuit translation (OriginIR to QProg)
@@ -110,9 +154,7 @@ class OriginQAdapter(QuantumAdapter):
     # Task submission
     # -------------------------------------------------------------------------
 
-    def submit(
-        self, circuit: str, *, shots: int = 1000, **kwargs: Any
-    ) -> str:
+    def submit(self, circuit: str, *, shots: int = 1000, **kwargs: Any) -> str:
         """Submit a single circuit to OriginQ Cloud.
 
         Args:
@@ -153,9 +195,7 @@ class OriginQAdapter(QuantumAdapter):
         job = backend.run(qprog, shots=shots, options=options)
         return job.job_id()
 
-    def submit_batch(
-        self, circuits: list[str], *, shots: int = 1000, **kwargs: Any
-    ) -> str | list[str]:
+    def submit_batch(self, circuits: list[str], *, shots: int = 1000, **kwargs: Any) -> str | list[str]:
         """Submit circuits as a group.
 
         Note: pyqpanda3 handles batch submission internally. This method
@@ -196,7 +236,7 @@ class OriginQAdapter(QuantumAdapter):
         # Split into groups
         task_ids: list[str] = []
         for i in range(0, len(circuits), self._task_group_size):
-            group = circuits[i:i + self._task_group_size]
+            group = circuits[i : i + self._task_group_size]
             qprogs = [self.translate_circuit(c) for c in group]
             job = backend.run(qprogs, shots=shots, options=options)
             task_ids.append(job.job_id())
@@ -348,12 +388,10 @@ class OriginQAdapter(QuantumAdapter):
             if taskinfo["status"] == TASK_STATUS_SUCCESS:
                 return taskinfo.get("result", [])
             if taskinfo["status"] == TASK_STATUS_FAILED:
-                raise RuntimeError(
-                    f"Failed to execute, errorinfo = {taskinfo.get('result')}"
-                )
+                raise RuntimeError(f"Failed to execute, errorinfo = {taskinfo.get('result')}")
 
             if retry > 0:
                 retry -= 1
-                warnings.warn(f"Query failed. Retry remains {retry} times.")
+                warnings.warn(f"Query failed. Retry remains {retry} times.", stacklevel=2)
             else:
                 raise RuntimeError("Retry count exhausted.")

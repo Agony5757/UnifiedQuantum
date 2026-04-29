@@ -23,7 +23,64 @@ from uniqc.task.config import load_quafu_config
 from uniqc.task.optional_deps import MissingDependencyError, check_quafu
 
 if TYPE_CHECKING:
-    import quafu
+    pass  # type hints use string annotations via `from __future__ import annotations`
+
+
+def _avg(values: list[float]) -> float | None:
+    """Return the arithmetic mean of a list, or None if the list is empty."""
+    return sum(values) / len(values) if values else None
+
+
+def _compute_quafu_fidelity(chip_info: dict[str, Any]) -> dict[str, Any]:
+    """Extract fidelity and coherence metrics from a Quafu get_chip_info() result.
+
+    Available:
+      - Avg. 2Q fidelity: from ``full_info.topological_structure[edge]['cz']['fidelity']``
+      - Avg. T1 / T2: from ``full_info.qubits_info[q]['T1']`` / ``['T2']`` (microseconds)
+
+    Not available from Quafu API:
+      - Avg. 1Q gate fidelity
+      - Avg. readout fidelity
+
+    Returns:
+        dict with keys: avg_1q_fidelity (None), avg_2q_fidelity, avg_readout_fidelity (None),
+        coherence_t1, coherence_t2.
+    """
+    full_info: dict[str, Any] = chip_info.get("full_info") or {}
+
+    # T1/T2 from qubits_info (values are in microseconds already)
+    t1s, t2s = [], []
+    qubits_info: dict[str, dict[str, Any]] = full_info.get("qubits_info") or {}
+    for qdata in qubits_info.values():
+        if (t1 := qdata.get("T1")) is not None:
+            t1s.append(float(t1))
+        if (t2 := qdata.get("T2")) is not None:
+            t2s.append(float(t2))
+
+    # 2Q fidelity from topological_structure (directed edges, take each once)
+    seen: set[tuple[int, int]] = set()
+    tq_fids: list[float] = []
+    topo: dict[str, dict[str, Any]] = full_info.get("topological_structure") or {}
+    for edge_key, gate_data in topo.items():
+        parts = edge_key.split("_")
+        if len(parts) == 2:
+            u, v = (
+                int(parts[0][1:]) if parts[0].startswith("Q") else int(parts[0]),
+                int(parts[1][1:]) if parts[1].startswith("Q") else int(parts[1]),
+            )
+            key = (u, v)
+            if key not in seen:
+                seen.add(key)
+                if (f := gate_data.get("cz", {}).get("fidelity")) is not None:
+                    tq_fids.append(float(f))
+
+    return {
+        "avg_1q_fidelity": None,  # not available from Quafu API
+        "avg_2q_fidelity": _avg(tq_fids) if tq_fids else None,
+        "avg_readout_fidelity": None,  # not available from Quafu API
+        "coherence_t1": _avg(t1s),
+        "coherence_t2": _avg(t2s),
+    }
 
 
 class QuafuAdapter(QuantumAdapter):
@@ -36,9 +93,7 @@ class QuafuAdapter(QuantumAdapter):
     name = "quafu"
 
     # Valid chip IDs
-    VALID_CHIP_IDS = frozenset(
-        {"ScQ-P10", "ScQ-P18", "ScQ-P136", "ScQ-P10C", "Dongling"}
-    )
+    VALID_CHIP_IDS = frozenset({"ScQ-P10", "ScQ-P18", "ScQ-P136", "ScQ-P10C", "Dongling"})
 
     # Upper limit on the number of groups retained in _task_history.
     # Beyond this threshold the oldest entry is evicted to avoid unbounded
@@ -86,16 +141,21 @@ class QuafuAdapter(QuantumAdapter):
     def list_backends(self) -> list[dict[str, Any]]:
         """Return raw Quafu backend metadata.
 
+        For hardware backends, fetches chip_info() to populate fidelity and
+        coherence data.
+
         Returns:
             List of dicts with keys: ``name``, ``num_qubits``, ``status``,
-            ``task_in_queue``, ``qv``, ``valid_gates``.
+            ``task_in_queue``, ``qv``, ``valid_gates``, plus fidelity/coherence
+            fields (avg_1q_fidelity, avg_2q_fidelity, avg_readout_fidelity,
+            coherence_t1, coherence_t2).
         """
         user = self._User(api_token=self._api_token)
         user.save_apitoken()
         raw_backends = user.get_available_backends()
         result: list[dict[str, Any]] = []
         for name, backend in raw_backends.items():
-            result.append({
+            entry: dict[str, Any] = {
                 "name": name,
                 "num_qubits": backend.qubit_num,
                 "status": backend.status,
@@ -103,27 +163,33 @@ class QuafuAdapter(QuantumAdapter):
                 "qv": backend.qv,
                 "system_id": backend.system_id,
                 "valid_gates": backend.get_valid_gates(),
-            })
+            }
+            # Attempt to fetch chip info for fidelity / coherence
+            try:
+                chip_info = backend.get_chip_info()
+                if isinstance(chip_info, dict) and chip_info.get("full_info"):
+                    entry.update(_compute_quafu_fidelity(chip_info))
+            except Exception:  # noqa: BLE001
+                pass
+            result.append(entry)
         return result
 
     # -------------------------------------------------------------------------
     # Circuit translation
     # -------------------------------------------------------------------------
 
-    def translate_circuit(self, originir: str) -> "QuantumCircuit":
+    def translate_circuit(self, originir: str) -> "QuantumCircuit":  # noqa: UP037,F821
         """Translate an OriginIR string to a Quafu QuantumCircuit."""
         from uniqc.originir.originir_line_parser import OriginIR_LineParser
 
         lines = originir.splitlines()
-        qc: "QuantumCircuit | None" = None
+        qc: "QuantumCircuit | None" = None  # noqa: UP037,F821
 
         for line in lines:
             try:
                 operation, qubit, cbit, parameter, dagger_flag, control_qubits = OriginIR_LineParser.parse_line(line)
             except NotImplementedError:
-                raise RuntimeError(
-                    f"Unknown OriginIR operation in quafu adapter: {line.strip()}"
-                ) from None
+                raise RuntimeError(f"Unknown OriginIR operation in quafu adapter: {line.strip()}") from None
             if operation == "QINIT":
                 qc = self._QuantumCircuit(int(qubit))  # type: ignore[arg-type]
                 continue
@@ -137,12 +203,12 @@ class QuafuAdapter(QuantumAdapter):
 
     def _reconstruct_qasm(
         self,
-        qc: "QuantumCircuit",
+        qc: "QuantumCircuit",  # noqa: UP037,F821
         operation: str | None,
         qubit: int | list[int],
         cbit: int | None,
         parameter: float | list[float] | None,
-    ) -> "QuantumCircuit":
+    ) -> "QuantumCircuit":  # noqa: UP037,F821
         """Append a single gate to a Quafu QuantumCircuit based on parsed OriginIR.
 
         This method is called internally by translate_circuit() for each
@@ -185,9 +251,7 @@ class QuafuAdapter(QuantumAdapter):
         elif operation is None or operation == "CREG":
             pass
         else:
-            raise RuntimeError(
-                f"Unknown OriginIR operation in quafu adapter: {operation}."
-            )
+            raise RuntimeError(f"Unknown OriginIR operation in quafu adapter: {operation}.")
         return qc
 
     # -------------------------------------------------------------------------
@@ -195,7 +259,11 @@ class QuafuAdapter(QuantumAdapter):
     # -------------------------------------------------------------------------
 
     def submit(
-        self, circuit: "QuantumCircuit", *, shots: int = 10000, **kwargs: Any
+        self,
+        circuit: "QuantumCircuit",  # noqa: UP037,F821
+        *,
+        shots: int = 10000,
+        **kwargs: Any,
     ) -> str:
         """Submit a single circuit to Quafu."""
         chip_id: str | None = kwargs.get("chip_id")
@@ -218,7 +286,11 @@ class QuafuAdapter(QuantumAdapter):
         return result.taskid
 
     def submit_batch(
-        self, circuits: list["QuantumCircuit"], *, shots: int = 10000, **kwargs: Any
+        self,
+        circuits: list["QuantumCircuit"],  # noqa: UP037,F821
+        *,
+        shots: int = 10000,
+        **kwargs: Any,
     ) -> list[str]:
         """Submit multiple circuits as a group to Quafu."""
         chip_id: str | None = kwargs.get("chip_id")
@@ -241,7 +313,10 @@ class QuafuAdapter(QuantumAdapter):
         taskids: list[str] = []
         for index, c in enumerate(circuits):
             result = task.send(
-                c, wait=False, name=f"{task_name}-{index}", group=group_name  # type: ignore[arg-type]
+                c,
+                wait=False,
+                name=f"{task_name}-{index}",
+                group=group_name,  # type: ignore[arg-type]
             )
             taskids.append(result.taskid)
 
