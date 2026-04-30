@@ -39,7 +39,6 @@ def main(
 
 # Import and register subcommands
 from . import backend
-from . import chip
 from . import circuit
 from . import simulate
 from . import submit
@@ -57,4 +56,3 @@ app.command("result", help=result.HELP)(result.result)
 app.add_typer(config.app, name="config")
 app.add_typer(task.app, name="task")
 app.add_typer(backend.app, name="backend")
-app.add_typer(chip.app, name="chip")

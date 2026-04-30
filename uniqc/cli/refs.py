@@ -49,10 +49,6 @@ CMD_REFS: dict[str, list[tuple[str, str]]] = {
         ("CLI Docs", f"{DOCS_URL}cli.html#uniqc-config"),
         ("GitHub", GITHUB_URL),
     ],
-    "chip": [
-        ("CLI Docs", f"{DOCS_URL}cli.html#uniqc-chip"),
-        ("GitHub", GITHUB_URL),
-    ],
 }
 
 # ----------------------------------------------------------------------
@@ -252,25 +248,20 @@ AI_HINTS: dict[str, list[tuple[str, str]]] = {
             "Switch profiles with: uniqc config profile use my-profile",
         ),
     ],
-    "chip": [
+    "backend-chip-display": [
         (
             "What is chip characterization data?",
             "Per-qubit T1/T2, gate fidelities, readout errors, and connectivity — "
             "used to pick the best qubits for your experiment or to model noise.",
         ),
         (
-            "Fetch chip data",
-            "Run uniqc chip update --platform originq to fetch chip calibration data from OriginQ Cloud. "
-            "Supported platforms: originq, quafu, ibm.",
+            "Syntax reminder",
+            "Use platform/chip_name format: uniqc backend chip-display originq/wuyuan:d5",
         ),
         (
-            "View cached chips",
-            "Run uniqc chip list to see all chips already in cache, including cache age and stale status.",
-        ),
-        (
-            "Inspect a specific chip",
-            "Run uniqc chip show originq:wuyuan:d5 to see full per-qubit and per-pair data. "
-            "The data is fetched and cached on first access.",
+            "Refresh stale data",
+            "If chip calibration was updated on the cloud, pass --update (or -u) to re-fetch: "
+            "uniqc backend chip-display originq/wuyuan:d5 --update",
         ),
         (
             "Next: use for qubit selection",
