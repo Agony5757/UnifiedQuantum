@@ -436,11 +436,12 @@ def submit_task(
 
     Args:
         circuit: The UnifiedQuantum Circuit to submit.
-        backend: The backend name (e.g., 'originq', 'quafu', 'ibm').
+        backend: The backend name (e.g., 'originq', 'quafu', 'ibm', 'dummy').
         shots: Number of measurement shots.
         metadata: Optional metadata to store with the task.
-        dummy: Override dummy mode. If None, uses UNIQC_DUMMY env var.
-            When True, uses local simulation instead of real backend.
+        dummy: **Deprecated.** Use ``backend='dummy'`` instead.
+            If True, routes to the local dummy simulator.
+            If None, uses the ``UNIQC_DUMMY`` environment variable.
         options: Optional typed backend options. Accepts a
             :class:`BackendOptions` instance, a plain dict (treated as
             ``**kwargs``), or ``None`` for platform defaults.
@@ -455,6 +456,7 @@ def submit_task(
         **kwargs: Additional backend-specific parameters.
             - For Quafu: chip_id, auto_mapping
             - For OriginQ: backend_name (e.g., 'origin:wuyuan:d5'), circuit_optimize, measurement_amend
+            - For dummy: chip_characterization, noise_model, available_qubits, available_topology
 
     Returns:
         The task ID assigned by the backend.
@@ -472,9 +474,13 @@ def submit_task(
         >>> circuit.h(0)
         >>> circuit.measure(0)
         >>> task_id = submit_task(circuit, backend='originq', shots=1000, backend_name='origin:wuyuan:d5')
-        >>> # Use dummy mode for local simulation
-        >>> task_id = submit_task(circuit, backend='quafu', dummy=True)
+        >>> # Local noisy simulation using chip characterization
+        >>> from uniqc.task.adapters.originq_adapter import OriginQAdapter
+        >>> chip = OriginQAdapter().get_chip_characterization("origin:wuyuan:d5")
+        >>> task_id = submit_task(circuit, backend='dummy', chip_characterization=chip)
     """
+    import warnings
+
     # Normalise options
     if options is not None:
         opts = BackendOptionsFactory.normalize_options(options, backend)
@@ -483,14 +489,18 @@ def submit_task(
         kwargs = merged_kwargs
         shots = opts.shots
 
-    # Determine if dummy mode should be used
+    # Handle dummy= parameter (deprecated)
     use_dummy = dummy if dummy is not None else UNIQC_DUMMY
+    if use_dummy and backend != "dummy":
+        warnings.warn(
+            "submit_task(..., dummy=True) is deprecated. "
+            "Use submit_task(circuit, 'dummy', ...) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        backend = "dummy"
 
-    if use_dummy:
-        # Use dummy adapter for local simulation
-        return _submit_dummy(circuit, backend, shots, metadata, **kwargs)
-
-    # Get backend instance
+    # Resolve backend instance
     try:
         backend_instance = backend_module.get_backend(backend)
     except ValueError as e:
@@ -502,12 +512,16 @@ def submit_task(
             f"Backend '{backend}' is not available. Please check your configuration and credentials."
         )
 
-    # Convert circuit using adapter
-    try:
-        adapter = _get_adapter(backend)
-        native_circuit = adapter.adapt(circuit)
-    except Exception as e:
-        raise _map_adapter_error(e, backend) from e
+    # Convert circuit using adapter (not needed for dummy backend)
+    if backend == "dummy":
+        # Dummy backend accepts OriginIR directly
+        native_circuit = circuit.originir
+    else:
+        try:
+            adapter = _get_adapter(backend)
+            native_circuit = adapter.adapt(circuit)
+        except Exception as e:
+            raise _map_adapter_error(e, backend) from e
 
     # Submit to backend
     try:
@@ -607,11 +621,12 @@ def submit_batch(
         circuits: List of UnifiedQuantum Circuits to submit.
         backend: The backend name.
         shots: Number of measurement shots per circuit.
-        dummy: Override dummy mode. If None, uses UNIQC_DUMMY env var.
+        dummy: **Deprecated.** Use ``backend='dummy'`` instead.
         options: Optional typed backend options. Same as in :func:`submit_task`.
         **kwargs: Additional backend-specific parameters.
             - For Quafu: chip_id, auto_mapping, group_name
             - For OriginQ: backend_name (e.g., 'origin:wuyuan:d5'), circuit_optimize
+            - For dummy: chip_characterization, noise_model, available_qubits
 
     Returns:
         List of task IDs assigned by the backend.
@@ -628,6 +643,8 @@ def submit_batch(
         >>> circuits = [circuit1, circuit2, circuit3]
         >>> task_ids = submit_batch(circuits, backend='quafu', shots=1000, chip_id='ScQ-P10')
     """
+    import warnings
+
     # Normalise options
     if options is not None:
         opts = BackendOptionsFactory.normalize_options(options, backend)
@@ -636,14 +653,18 @@ def submit_batch(
         kwargs = merged_kwargs
         shots = opts.shots
 
-    # Determine if dummy mode should be used
+    # Handle dummy= parameter (deprecated)
     use_dummy = dummy if dummy is not None else UNIQC_DUMMY
+    if use_dummy and backend != "dummy":
+        warnings.warn(
+            "submit_batch(..., dummy=True) is deprecated. "
+            "Use submit_batch(circuits, 'dummy', ...) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        backend = "dummy"
 
-    if use_dummy:
-        # Use dummy adapter for local simulation
-        return _submit_batch_dummy(circuits, backend, shots, **kwargs)
-
-    # Get backend instance
+    # Resolve backend instance
     try:
         backend_instance = backend_module.get_backend(backend)
     except ValueError as e:
@@ -655,12 +676,16 @@ def submit_batch(
             f"Backend '{backend}' is not available. Please check your configuration and credentials."
         )
 
-    # Convert circuits using adapter
-    try:
-        adapter = _get_adapter(backend)
-        native_circuits = adapter.adapt_batch(circuits)
-    except Exception as e:
-        raise _map_adapter_error(e, backend) from e
+    # Convert circuits using adapter (not needed for dummy backend)
+    if backend == "dummy":
+        # Dummy backend accepts OriginIR strings directly
+        native_circuits = [c.originir for c in circuits]
+    else:
+        try:
+            adapter = _get_adapter(backend)
+            native_circuits = adapter.adapt_batch(circuits)
+        except Exception as e:
+            raise _map_adapter_error(e, backend) from e
 
     # Submit batch to backend
     try:

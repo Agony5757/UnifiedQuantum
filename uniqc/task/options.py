@@ -192,6 +192,12 @@ class DummyOptions(BackendOptions):
     ----------
     noise_model : Any | None
         Optional noise model for noisy simulation.
+        Supported keys: ``depol_1q``, ``depol_2q``, ``depol`` (fallback for both).
+    chip_characterization : ChipCharacterization | None
+        Chip characterization data. When provided, the simulator derives
+        realistic noise parameters from per-qubit and per-pair calibration
+        data (T1/T2, gate fidelities, readout errors).
+        Cannot be used together with ``noise_model`` (noise_model takes precedence).
     available_qubits : int
         Number of qubits available in the dummy simulator. Default: 16.
     available_topology : list[list[int]] | None
@@ -201,6 +207,7 @@ class DummyOptions(BackendOptions):
 
     platform: dataclasses.InitVar[Platform] = dataclasses.field(default=Platform.DUMMY, repr=False)
     noise_model: Any = None
+    chip_characterization: Any = None
     available_qubits: int = 16
     available_topology: list[list[int]] | None = None
 
@@ -210,6 +217,8 @@ class DummyOptions(BackendOptions):
         }
         if self.noise_model is not None:
             kwargs["noise_model"] = self.noise_model
+        if self.chip_characterization is not None:
+            kwargs["chip_characterization"] = self.chip_characterization
         if self.available_topology is not None:
             kwargs["available_topology"] = self.available_topology
         return kwargs
@@ -301,6 +310,7 @@ class BackendOptionsFactory:
             return DummyOptions(
                 shots=shots,
                 noise_model=kwargs.pop("noise_model", None),
+                chip_characterization=kwargs.pop("chip_characterization", None),
                 available_qubits=kwargs.pop("available_qubits", 16),
                 available_topology=kwargs.pop("available_topology", None),
             )

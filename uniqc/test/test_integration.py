@@ -223,7 +223,7 @@ class TestDummySubmitIntegration:
     """
 
     def test_submit_task_with_options_dict(self):
-        """submit_task accepts a dict as the options parameter."""
+        """submit_task accepts a dict as the options parameter via backend='dummy'."""
         from uniqc.circuit_builder import Circuit
         from uniqc.task_manager import submit_task
 
@@ -233,9 +233,8 @@ class TestDummySubmitIntegration:
 
         task_id = submit_task(
             circuit,
-            "originq",
+            "dummy",
             shots=100,
-            dummy=True,
             options={"available_qubits": 4},
         )
         assert isinstance(task_id, str)
@@ -252,7 +251,7 @@ class TestDummySubmitIntegration:
         circuit.cnot(0, 1)
 
         opts = DummyOptions(available_qubits=4, shots=200)
-        task_id = submit_task(circuit, "quafu", dummy=True, options=opts)
+        task_id = submit_task(circuit, "dummy", options=opts)
         assert isinstance(task_id, str)
         assert len(task_id) > 0
 
@@ -267,9 +266,8 @@ class TestDummySubmitIntegration:
 
         task_id = submit_task(
             circuit,
-            "originq",
+            "dummy",
             shots=100,
-            dummy=True,
             options={"available_qubits": 4},
             available_qubits=8,  # should override options
         )
