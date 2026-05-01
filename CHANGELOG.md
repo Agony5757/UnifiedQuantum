@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-05-01
+
+### Added
+
+- **Enhanced Transpiler** (`uniqc/transpiler/compiler.py`): New `compile()` function — the canonical chip-aware circuit transpilation entry point for UnifiedQuantum. Wraps Qiskit transpilation with `BackendInfo`/`ChipCharacterization`-aware routing, multiple output formats, and typed `TranspilerConfig`. Supports `output_format="circuit"` (default, returns `Circuit`), `"originir"`, and `"qasm"`. `level` parameter maps directly to Qiskit optimization levels 0–3. `basis_gates` accepts a custom gate set (default: `["cz", "sx", "rz"]`).
+- **`TranspilerConfig` dataclass** (`uniqc/transpiler/compiler.py`): Typed configuration object for `compile()`, frozen and hashable. Validates `type` and `level` at construction time.
+- **`CompilationResult` dataclass**: Holds compiled output, estimated fidelity, SWAP overhead count, and informational messages from the transpiler pipeline.
+- **Fidelity-weighted routing** (`_route_with_fidelity`): Dijkstra-based SWAP insertion that treats each edge weight as `1 - fidelity`, preferring high-fidelity qubit chains. Computes a cumulative circuit fidelity estimate as a by-product.
+- **Backend Options hierarchy** (`uniqc/task/options.py`): Typed `BackendOptions` base class with platform-specific subclasses — `OriginQOptions`, `QuafuOptions`, `IBMOptions`, `DummyOptions` — and a `BackendOptionsFactory` for constructing from `**kwargs` dicts or direct instantiation. All fields are validated with sensible defaults; `to_kwargs()` bridges back to the existing adapter `**kwargs` interface.
+- **`BackendOptionsFactory`**: Three-mode factory — accepts `None` (returns platform defaults), a `BackendOptions` instance (returned unchanged), or a `dict` (treated as `**kwargs`). Main integration point is `normalize_options()`.
+- **`RegionSelector`** (`uniqc/region_selector.py`): Finds optimal physical qubit regions from `ChipCharacterization` calibration data. `find_best_1D_chain(length)` uses greedy expansion with DFS backtracking fallback to return the lexicographically-first highest-fidelity chain. `find_best_2D_from_circuit(circuit)` enumerates rectangular subgraphs and scores them by `estimate_circuit_fidelity()`. All three methods support product-of-fidelities fidelity estimation.
+- **Top-level exports**: `compile`, `TranspilerConfig`, `CompilationResult`, `CompilationFailedException`, `RegionSelector`, `ChainSearchResult`, `RegionSearchResult`, `OriginQOptions`, `QuafuOptions`, `IBMOptions`, `DummyOptions`, `BackendOptionsFactory`, `BackendOptionsError` are now exported from `uniqc/__init__.py`.
+
+### Changed
+
+- **`submit_task()` / `submit_batch()`** (`uniqc/task_manager.py`): Added optional `options` parameter accepting `BackendOptions | dict | None`. When provided, options are normalised via `BackendOptionsFactory.normalize_options()` and merged with any extra `**kwargs`. Fully backward-compatible — existing `**kwargs`-only calls are unchanged.
+- **`uniqc/transpiler/__init__.py`**: Re-exports `compile`, `TranspilerConfig`, and `CompilationResult` from the new `compiler` submodule.
+- **`Platform` enum** (`uniqc/backend_info.py`): Added `DUMMY = "dummy"` variant to support the dummy simulator in `BackendOptions`.
+
+### Fixed
+
+- **`compile(output_format="originir")`**: Was incorrectly returning raw QASM string. Now correctly calls `convert_qasm_to_oir()` before returning.
+- **`RegionSelector._backtrack_chain`**: DFS was returning the highest-fidelity path overall instead of the best path of the exact requested length. Added separate `best_exact_path`/`best_exact_fid` tracking so exact-length paths are returned correctly.
+- **`RegionSelector._greedy_chain_expand`**: DFS was returning the full longest path even when only `length` qubits were requested. Added truncation to return exactly `length` qubits.
+- **`RegionSelector._build_graph`**: Fixed `TypeError` when iterating over `QubitTopology` dataclass edges — changed from tuple unpacking to attribute access (`.u`, `.v`).
+
 ## [0.0.6] - 2026-04-29
 
 ### Added

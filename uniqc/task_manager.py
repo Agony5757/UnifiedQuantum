@@ -106,6 +106,7 @@ from uniqc.task.adapters.base import (
     QuantumAdapter,
 )
 from uniqc.task.result_types import DryRunResult
+from uniqc.task.options import BackendOptions, BackendOptionsFactory
 from uniqc.task.store import (
     DEFAULT_CACHE_DIR,
     TaskInfo,
@@ -425,6 +426,7 @@ def submit_task(
     shots: int = 1000,
     metadata: dict | None = None,
     dummy: bool | None = None,
+    options: BackendOptions | dict | None = None,
     **kwargs: Any,
 ) -> str:
     """Submit a single circuit to a quantum backend.
@@ -439,6 +441,17 @@ def submit_task(
         metadata: Optional metadata to store with the task.
         dummy: Override dummy mode. If None, uses UNIQC_DUMMY env var.
             When True, uses local simulation instead of real backend.
+        options: Optional typed backend options. Accepts a
+            :class:`BackendOptions` instance, a plain dict (treated as
+            ``**kwargs``), or ``None`` for platform defaults.
+            Example::
+
+                from uniqc.task.options import OriginQOptions
+                opts = OriginQOptions(circuit_optimize=False)
+                submit_task(circuit, "originq", options=opts)
+
+            If provided alongside ``**kwargs``, ``options`` takes precedence
+            for the fields it defines.
         **kwargs: Additional backend-specific parameters.
             - For Quafu: chip_id, auto_mapping
             - For OriginQ: backend_name (e.g., 'origin:wuyuan:d5'), circuit_optimize, measurement_amend
@@ -462,6 +475,14 @@ def submit_task(
         >>> # Use dummy mode for local simulation
         >>> task_id = submit_task(circuit, backend='quafu', dummy=True)
     """
+    # Normalise options
+    if options is not None:
+        opts = BackendOptionsFactory.normalize_options(options, backend)
+        merged_kwargs = opts.to_kwargs()
+        merged_kwargs.update(kwargs)
+        kwargs = merged_kwargs
+        shots = opts.shots
+
     # Determine if dummy mode should be used
     use_dummy = dummy if dummy is not None else UNIQC_DUMMY
 
@@ -577,6 +598,7 @@ def submit_batch(
     backend: str,
     shots: int = 1000,
     dummy: bool | None = None,
+    options: BackendOptions | dict | None = None,
     **kwargs: Any,
 ) -> list[str]:
     """Submit multiple circuits as a batch to a quantum backend.
@@ -586,6 +608,7 @@ def submit_batch(
         backend: The backend name.
         shots: Number of measurement shots per circuit.
         dummy: Override dummy mode. If None, uses UNIQC_DUMMY env var.
+        options: Optional typed backend options. Same as in :func:`submit_task`.
         **kwargs: Additional backend-specific parameters.
             - For Quafu: chip_id, auto_mapping, group_name
             - For OriginQ: backend_name (e.g., 'origin:wuyuan:d5'), circuit_optimize
@@ -605,6 +628,14 @@ def submit_batch(
         >>> circuits = [circuit1, circuit2, circuit3]
         >>> task_ids = submit_batch(circuits, backend='quafu', shots=1000, chip_id='ScQ-P10')
     """
+    # Normalise options
+    if options is not None:
+        opts = BackendOptionsFactory.normalize_options(options, backend)
+        merged_kwargs = opts.to_kwargs()
+        merged_kwargs.update(kwargs)
+        kwargs = merged_kwargs
+        shots = opts.shots
+
     # Determine if dummy mode should be used
     use_dummy = dummy if dummy is not None else UNIQC_DUMMY
 
