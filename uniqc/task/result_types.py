@@ -33,7 +33,7 @@ from __future__ import annotations
 __all__ = ["UnifiedResult"]
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
@@ -66,24 +66,24 @@ class UnifiedResult:
         {'00': 0.512, '11': 0.488}
     """
 
-    counts: Dict[str, int]
-    probabilities: Dict[str, float]
+    counts: dict[str, int]
+    probabilities: dict[str, float]
     shots: int
     platform: str
     task_id: str
-    backend_name: Optional[str] = None
-    execution_time: Optional[float] = None
+    backend_name: str | None = None
+    execution_time: float | None = None
     raw_result: Any = field(default=None, repr=False)
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     @classmethod
     def from_counts(
         cls,
-        counts: Dict[str, int],
+        counts: dict[str, int],
         platform: str,
         task_id: str,
         **kwargs: Any,
-    ) -> "UnifiedResult":
+    ) -> UnifiedResult:
         """Create UnifiedResult from measurement counts.
 
         Probabilities are automatically computed from counts.
@@ -103,10 +103,7 @@ class UnifiedResult:
             ... )
         """
         total = sum(counts.values())
-        if total == 0:
-            probabilities = {}
-        else:
-            probabilities = {k: v / total for k, v in counts.items()}
+        probabilities = {} if total == 0 else {k: v / total for k, v in counts.items()}
         return cls(
             counts=counts,
             probabilities=probabilities,
@@ -119,12 +116,12 @@ class UnifiedResult:
     @classmethod
     def from_probabilities(
         cls,
-        probabilities: Dict[str, float],
+        probabilities: dict[str, float],
         shots: int,
         platform: str,
         task_id: str,
         **kwargs: Any,
-    ) -> "UnifiedResult":
+    ) -> UnifiedResult:
         """Create UnifiedResult from probability distribution.
 
         Counts are computed by multiplying probabilities by shots count.
@@ -153,6 +150,18 @@ class UnifiedResult:
             task_id=task_id,
             **kwargs,
         )
+
+    def to_dict(self) -> dict[str, int]:
+        """Return flat counts dict for unified output.
+
+        All platform adapters normalize their results to this format, ensuring
+        consistent return types regardless of which quantum cloud backend was used.
+
+        Returns:
+            Flat dict mapping bitstrings to measurement counts.
+            Example: {"00": 512, "1111": 488}
+        """
+        return self.counts
 
     def get_expectation(self, observable: str = "Z") -> float:
         """Compute expectation value for a simple observable.

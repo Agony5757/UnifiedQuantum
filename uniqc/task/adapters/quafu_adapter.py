@@ -458,10 +458,7 @@ class QuafuAdapter(QuantumAdapter):
         if status == TASK_STATUS_SUCCESS:
             return {
                 "status": status,
-                "result": {
-                    "counts": result.counts,
-                    "probabilities": result.probabilities,
-                },
+                "result": dict(result.counts),
             }
         return {"status": status}
 

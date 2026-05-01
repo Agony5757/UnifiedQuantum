@@ -35,11 +35,10 @@ __all__ = ["DummyAdapter", "UNIQC_DUMMY"]
 
 import hashlib
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .base import QuantumAdapter, TASK_STATUS_SUCCESS, TASK_STATUS_FAILED
 from ..result_types import UnifiedResult
-from ..normalizers import normalize_dummy
+from .base import TASK_STATUS_FAILED, TASK_STATUS_SUCCESS, QuantumAdapter
 
 # Check environment variable for global dummy mode
 UNIQC_DUMMY = os.environ.get("UNIQC_DUMMY", "").lower() in ("true", "1", "yes")
@@ -76,9 +75,9 @@ class DummyAdapter(QuantumAdapter):
 
     def __init__(
         self,
-        noise_model: Optional[Dict[str, Any]] = None,
-        available_qubits: Optional[List[int]] = None,
-        available_topology: Optional[List[List[int]]] = None,
+        noise_model: dict[str, Any] | None = None,
+        available_qubits: list[int] | None = None,
+        available_topology: list[list[int]] | None = None,
     ) -> None:
         """Initialize the DummyAdapter.
 
@@ -109,13 +108,14 @@ class DummyAdapter(QuantumAdapter):
         self.noise_model = noise_model
         self.available_qubits = available_qubits or []
         self.available_topology = available_topology or []
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
         self._simulator_cls = None  # Lazy loaded
 
     def _get_simulator_cls(self):
         """Lazily load the simulator class."""
         if self._simulator_cls is None:
             from uniqc.simulator import OriginIR_Simulator
+
             self._simulator_cls = OriginIR_Simulator
         return self._simulator_cls
 
@@ -179,10 +179,7 @@ class DummyAdapter(QuantumAdapter):
             unified_result = self._simulate(circuit, shots)
             self._cache[task_id] = {
                 "status": TASK_STATUS_SUCCESS,
-                "result": unified_result.to_dict() if hasattr(unified_result, 'to_dict') else {
-                    "counts": unified_result.counts,
-                    "probabilities": unified_result.probabilities,
-                },
+                "result": unified_result.to_dict(),
                 "unified_result": unified_result,
             }
         except Exception as e:
@@ -194,11 +191,11 @@ class DummyAdapter(QuantumAdapter):
 
     def submit_batch(
         self,
-        circuits: List[str],
+        circuits: list[str],
         *,
         shots: int = 1000,
         **kwargs: Any,
-    ) -> List[str]:
+    ) -> list[str]:
         """Simulate multiple circuits locally.
 
         Args:
@@ -215,7 +212,7 @@ class DummyAdapter(QuantumAdapter):
     # Task query
     # -------------------------------------------------------------------------
 
-    def query(self, taskid: str) -> Dict[str, Any]:
+    def query(self, taskid: str) -> dict[str, Any]:
         """Retrieve the cached result for a task.
 
         Since dummy tasks are executed immediately on submission,
@@ -240,7 +237,7 @@ class DummyAdapter(QuantumAdapter):
             result["error"] = cached["error"]
         return result
 
-    def query_batch(self, taskids: List[str]) -> Dict[str, Any]:
+    def query_batch(self, taskids: list[str]) -> dict[str, Any]:
         """Query multiple tasks and merge results.
 
         Args:
@@ -274,6 +271,7 @@ class DummyAdapter(QuantumAdapter):
             True if the C++ simulation backend is available.
         """
         from ..optional_deps import check_simulation
+
         return check_simulation("cpp")
 
     def clear_cache(self) -> None:

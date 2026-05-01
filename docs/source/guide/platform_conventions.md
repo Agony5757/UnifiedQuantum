@@ -39,29 +39,24 @@
 ```python
 {
     "status": "success",
-    "result": {
-        "counts": {"00": 512, "11": 488},
-        "probabilities": {"00": 0.512, "11": 0.488}
-    }
+    "result": {"00": 512, "11": 488}
 }
 ```
 
-嵌套字典，包含 `counts`（shot 统计）和 `probabilities`（理论概率）。注意：`wait_for_result()` 在 task_manager 层会解包返回 `{"counts": ..., "probabilities": ...}`。
+扁平 `{bitstring: shots}` 字典，与 OriginQ / Dummy 格式统一。
 
 ### 2.3 IBM / Qiskit
 
 ```python
 {
     "status": "success",
-    "result": [{"00": 512, "11": 488}, {"01": 300, "11": 700}],
+    "result": {"00": 512, "11": 488},
     "time": "Fri 01 May 2026, 10:00AM",
-    "backend_name": "ibm_qasm_simulator"
+    "backend_name": "ibm_fez"
 }
 ```
 
-批量提交时 `result` 为 counts 字典列表（每个电路一个）；单电路提交时也是列表（只有一个元素）。
-
-### 2.4 Dummy
+单电路提交返回扁平 `{bitstring: shots}` 字典。`query_batch()` 返回 `{"result": [flat_dict, ...]}`。
 
 ```python
 {
@@ -72,19 +67,22 @@
 
 与 OriginQ 相同，扁平 `{bitstring: shots}` 字典。
 
-### 2.5 处理不同结果格式
+### 2.5 统一结果格式
+
+所有平台的 `wait_for_result()` / `query_task()` 均返回统一的扁平 counts 字典：
 
 ```python
 from uniqc.task_manager import wait_for_result
 
+# 所有平台统一返回 {"00": 512, "1111": 488}
 result = wait_for_result(task_id, backend="quafu")
+# result == {"00": 512, "1111": 488}  # 扁平 dict，无需后处理
 
-# Quafu: result 是 {"counts": {...}, "probabilities": {...}}
-counts = result["counts"]
-
-# OriginQ / Dummy: result 直接是 {"00": 512, ...}
-# IBM: result 是 [{"00": 512}, ...]（列表）
+result = wait_for_result(task_id, backend="ibm")
+# result == {"00": 512, "1111": 488}  # 同样格式
 ```
+
+`wait_for_result()` 的实际返回值是 `result["result"]`，各 adapter 已统一将其规范化为 `{bitstring: shots}` 扁平字典。
 
 ---
 
@@ -253,7 +251,7 @@ export ORIGINQ_AVAILABLE_TOPOLOGY='[[0,1],[1,2],[2,3]]'
 |------|---------|-------|-----|-------|
 | 地区 | 中国 | 中国（BAQIS） | 全球 | 本地 |
 | 输入 | OriginIR string | quafu.QuantumCircuit | qiskit.QuantumCircuit | OriginIR string |
-| 结果格式 | `{bitstring: shots}` | `{counts, probabilities}` | `[counts, ...]` | `{bitstring: shots}` |
+| 结果格式 | `{bitstring: shots}` | `{bitstring: shots}` | `{bitstring: shots}`（单电路）/ list（batch） | `{bitstring: shots}` |
 | 提交模式 | 异步 | 异步（`wait=` 可选） | 同步 | 同步 |
 | `query_sync()` | ✅ | ✅ | ✅ | ❌ |
 | 1Q 门保真度 | ✅ 可用 | ❌ 返回 None | ✅ 可用 | ❌ |
