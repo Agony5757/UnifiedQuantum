@@ -271,7 +271,7 @@ class QiskitAdapter(QuantumAdapter):
 
         return {
             "status": TASK_STATUS_SUCCESS,
-            "result": results,
+            "result": results[0] if results else {},
             "time": job.creation_date.strftime("%a %d %b %Y, %I:%M%p") if hasattr(job, "creation_date") else "",
             "backend_name": job.backend().name if hasattr(job, "backend") else "",
         }
@@ -294,7 +294,7 @@ class QiskitAdapter(QuantumAdapter):
             ):
                 taskinfo["status"] = TASK_STATUS_RUNNING
             if taskinfo["status"] == TASK_STATUS_SUCCESS:
-                taskinfo["result"].extend(result_i.get("result", []))
+                taskinfo["result"].append(result_i.get("result", {}))
         return taskinfo
 
     # -------------------------------------------------------------------------

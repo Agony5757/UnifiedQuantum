@@ -189,12 +189,15 @@ python -m uniqc submit circuit.qasm -p ibm -s 1000 --wait --timeout 300
 
 ## 结果格式说明
 
+所有平台的 `wait_for_result()` / `result` 命令返回统一格式：**扁平 `{bitstring: shots}` 字典**，无需按平台分别适配。
+
 | 平台 | `result["result"]` 结构 | 示例 |
 |------|------------------------|------|
 | OriginQ | `{bitstring: shots}` 扁平 dict | `{"0000": 502, "1111": 498}` |
-| Quafu | `{"counts": {...}, "probabilities": {...}}` | `{"counts": {"0000": 502, ...}}` |
-| IBM | `[counts_dict, ...]` counts dict 列表 | `[{"0000": 502, "1111": 498}]` |
+| Quafu | `{bitstring: shots}` 扁平 dict | `{"0000": 502, "1111": 498}` |
+| IBM | `{bitstring: shots}` 扁平 dict（单电路） | `{"0000": 502, "1111": 498}` |
+| Dummy | `{bitstring: shots}` 扁平 dict | `{"0000": 502, "1111": 498}` |
 
-> **注意**：不同平台返回的 `result` 内层结构不同，这是云平台原生格式差异。
-> `wait_for_result` / `--wait` 会自动处理轮询逻辑，但结果的后处理需按平台分别适配。
+批量提交（`submit_batch`）时，`result["result"]` 为扁平 dict 列表：`[{"0000": 502, ...}, {"1111": 498, ...}]`。
+
 > 详见 [平台约定文档](https://github.com/IAI-USTC-Quantum/UnifiedQuantum/blob/main/docs/source/guide/platform_conventions.md)。
