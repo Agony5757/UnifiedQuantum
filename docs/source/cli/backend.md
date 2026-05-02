@@ -20,8 +20,19 @@
 ### 基本用法
 
 ```bash
-# 列出所有平台的后端（默认只显示 available）
+### 输出格式
+
+```bash
+# 表格输出（默认）
 uniqc backend list
+
+# JSON 输出（返回符合 RFC 8259 的 JSON 数组）
+uniqc backend list --format json
+```
+
+`--format json` 输出一个 JSON 数组，每个元素为后端的完整信息对象，无匹配时输出空数组 `[]`。
+
+## 芯片详情 (`uniqc backend chip-display`)
 
 # 仅显示指定平台
 uniqc backend list --platform originq

@@ -221,6 +221,7 @@ def dry_run_task(
         "originq": OriginQAdapter,
         "quafu": QuafuAdapter,
         "ibm": QiskitAdapter,
+        "dummy": DummyAdapter,
     }
 
     if use_dummy:
@@ -663,6 +664,10 @@ def submit_batch(
             stacklevel=2,
         )
         backend = "dummy"
+
+    # Route dummy backend to _submit_batch_dummy which pre-populates results
+    if use_dummy and backend == "dummy":
+        return _submit_batch_dummy(circuits, backend, shots=shots, **kwargs)
 
     # Resolve backend instance
     try:

@@ -56,6 +56,7 @@ class OriginQAdapter(QuantumAdapter):
         self._QCloudJob: Any = None
         self._JobStatus: Any = None
         self._DataBase: Any = None
+        self._QCloudSimulator: Any = None
         self._convert_originir: Any = None
 
         # State for the current/last submitted job
@@ -68,13 +69,21 @@ class OriginQAdapter(QuantumAdapter):
             try:
                 require("pyqpanda3", "originq")
                 from pyqpanda3.intermediate_compiler import convert_originir_string_to_qprog
-                from pyqpanda3.qcloud import DataBase, JobStatus, QCloudJob, QCloudOptions, QCloudService
+                from pyqpanda3.qcloud import (
+                    DataBase,
+                    JobStatus,
+                    QCloudJob,
+                    QCloudOptions,
+                    QCloudService,
+                    QCloudSimulator,
+                )
 
                 self._service = QCloudService(api_key=self._api_key)
                 self._QCloudOptions = QCloudOptions
                 self._QCloudJob = QCloudJob
                 self._JobStatus = JobStatus
                 self._DataBase = DataBase
+                self._QCloudSimulator = QCloudSimulator
                 self._convert_originir = convert_originir_string_to_qprog
             except Exception as e:
                 raise RuntimeError(f"Failed to initialize pyqpanda3 for OriginQ: {e}") from e
@@ -176,6 +185,11 @@ class OriginQAdapter(QuantumAdapter):
         self._ensure_imports()
 
         backend_name = kwargs.get("backend_name", "origin:wuyuan:d5")
+
+        # Simulator backends require the QCloudSimulator API, not QCloudOptions
+        if backend_name in ORIGINQ_SIMULATOR_NAMES:
+            return self._submit_simulator(backend_name, circuit, shots=shots)
+
         circuit_optimize = kwargs.get("circuit_optimize", True)
         measurement_amend = kwargs.get("measurement_amend", False)
         auto_mapping = kwargs.get("auto_mapping", False)
@@ -204,6 +218,22 @@ class OriginQAdapter(QuantumAdapter):
         job = backend.run(qprog, shots=shots, options=options)
         return job.job_id()
 
+    def _submit_simulator(self, backend_name: str, circuit: str, *, shots: int = 1000) -> str:
+        """Submit a circuit to an OriginQ simulator backend (full_amplitude, etc.).
+
+        Args:
+            backend_name: Simulator backend name (e.g., ``"full_amplitude"``).
+            circuit: OriginIR format circuit string.
+            shots: Number of measurement shots.
+
+        Returns:
+            Task ID string.
+        """
+        qprog = self.translate_circuit(circuit)
+        sim = self._QCloudSimulator(api_key=self._api_key, machine_name=backend_name)
+        result = sim.run(qprog, shots=shots)
+        return result.job_id() if hasattr(result, "job_id") else f"sim-{backend_name}"
+
     def submit_batch(self, circuits: list[str], *, shots: int = 1000, **kwargs: Any) -> str | list[str]:
         """Submit circuits as a group.
 
@@ -221,6 +251,11 @@ class OriginQAdapter(QuantumAdapter):
         self._ensure_imports()
 
         backend_name = kwargs.get("backend_name", "origin:wuyuan:d5")
+
+        # Simulator backends require the QCloudSimulator API, not QCloudOptions
+        if backend_name in ORIGINQ_SIMULATOR_NAMES:
+            return self._submit_batch_simulator(backend_name, circuits, shots=shots)
+
         circuit_optimize = kwargs.get("circuit_optimize", True)
         measurement_amend = kwargs.get("measurement_amend", False)
         auto_mapping = kwargs.get("auto_mapping", False)
@@ -252,6 +287,24 @@ class OriginQAdapter(QuantumAdapter):
             qprogs = [self.translate_circuit(c) for c in group]
             job = backend.run(qprogs, shots=shots, options=options)
             task_ids.append(job.job_id())
+
+        return task_ids
+
+    def _submit_batch_simulator(self, backend_name: str, circuits: list[str], *, shots: int = 1000) -> list[str]:
+        """Submit circuits to an OriginQ simulator backend.
+
+        Args:
+            backend_name: Simulator backend name.
+            circuits: List of OriginIR format circuit strings.
+            shots: Number of measurement shots.
+
+        Returns:
+            List of task IDs.
+        """
+        task_ids: list[str] = []
+        for circuit in circuits:
+            task_ids.append(self._submit_simulator(backend_name, circuit, shots=shots))
+        return task_ids
 
         return task_ids
 
@@ -485,11 +538,20 @@ class OriginQAdapter(QuantumAdapter):
             )
 
         # Per-pair data
+        # Build a qubit-pair lookup from the topology so we can look up
+        # (u, v) by index even when double_qubits_info() objects lack
+        # get_qubit_u() / get_qubit_v() methods (the fallback used before).
+        topo_by_index: dict[int, tuple[int, int]] = {i: (u, v) for i, (u, v) in enumerate(raw_topo)}
+
         two_qubit_data: list[TwoQubitData] = []
-        for dq in ci.double_qubits_info() or []:
+        for idx, dq in enumerate(ci.double_qubits_info() or []):
             fid = dq.get_fidelity() if hasattr(dq, "get_fidelity") else None
-            u = dq.get_qubit_u() if hasattr(dq, "get_qubit_u") else 0
-            v = dq.get_qubit_v() if hasattr(dq, "get_qubit_v") else 0
+            # Prefer the dedicated accessors if available; otherwise use topology index
+            if hasattr(dq, "get_qubit_u") and hasattr(dq, "get_qubit_v"):
+                u = dq.get_qubit_u()
+                v = dq.get_qubit_v()
+            else:
+                u, v = topo_by_index.get(idx, (0, 0))
             two_qubit_data.append(
                 TwoQubitData(
                     qubit_u=u,

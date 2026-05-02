@@ -2,7 +2,7 @@
 
 These tests verify that:
 1. Each adapter correctly translates OriginIR to provider-native circuits.
-2. Config is loaded from environment variables.
+2. Config is loaded from environment variables, with YAML config fallback (issue #45).
 3. Task modules delegate to adapters.
 
 Cloud tests require real credentials and are marked with @pytest.mark.cloud.
@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -103,44 +104,89 @@ class RunTestConfigEnvVars:
         assert config["task_group_size"] == 50
 
     def run_test_originq_config_deprecated_file_fallback(self, monkeypatch, tmp_path):
-        """File fallback is no longer supported - ImportError raised when env vars absent."""
+        """Deprecated JSON file format is not used; empty-token YAML raises ImportError.
+
+        The old ``originq_cloud_config.json`` format is not read.
+        Instead, ``~/.uniqc/uniqc.yml`` YAML config is checked as fallback (issue #45 fix).
+        With an empty-token YAML config, ImportError is correctly raised.
+        """
         monkeypatch.delenv("ORIGINQ_API_KEY", raising=False)
-
-        # Create a config file (should NOT be used anymore)
-        config_file = tmp_path / "originq_cloud_config.json"
-        config_file.write_text(
-            json.dumps(
-                {
-                    "apitoken": "file_key",
-                    "task_group_size": 50,
-                }
-            )
+        # Create a YAML config with empty token at the real config location
+        config_dir = tmp_path / ".uniqc"
+        config_dir.mkdir()
+        yaml_config = config_dir / "uniqc.yml"
+        yaml_config.write_text(
+            "active_profile: default\n"
+            "default:\n"
+            "  originq:\n"
+            "    token: \"\"\n"
         )
-        monkeypatch.chdir(tmp_path)
+        # Patch Path.home() so ~/.uniqc/uniqc.yml points to our temp dir
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
-        # Clear module cache to force re-import
-        if "uniqc.task.config" in sys.modules:
-            del sys.modules["uniqc.task.config"]
+        # Clear module cache
+        for mod in list(sys.modules):
+            if mod.startswith("uniqc.task.config") or mod.startswith("uniqc.config"):
+                del sys.modules[mod]
 
         from uniqc.task.config import load_originq_config
 
-        # Should raise ImportError - file fallback is no longer supported
+        # Should raise ImportError since YAML token is empty
         with pytest.raises(ImportError, match="ORIGINQ_API_KEY"):
             load_originq_config()
 
     def run_test_originq_config_import_error_without_config(self, monkeypatch, tmp_path):
-        """ImportError raised when env vars are absent."""
-        monkeypatch.delenv("ORIGINQ_API_KEY", raising=False)
-        monkeypatch.chdir(tmp_path)
+        """ImportError raised when env vars are absent and YAML config has no token.
 
-        # Force re-import by clearing module cache
-        if "uniqc.task.config" in sys.modules:
-            del sys.modules["uniqc.task.config"]
+        After the #45 fix, the YAML config file is checked as fallback.
+        With an empty-token YAML, ImportError is correctly raised.
+        """
+        monkeypatch.delenv("ORIGINQ_API_KEY", raising=False)
+        config_dir = tmp_path / ".uniqc"
+        config_dir.mkdir()
+        yaml_config = config_dir / "uniqc.yml"
+        yaml_config.write_text(
+            "active_profile: default\n"
+            "default:\n"
+            "  originq:\n"
+            "    token: \"\"\n"
+        )
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        for mod in list(sys.modules):
+            if mod.startswith("uniqc.task.config") or mod.startswith("uniqc.config"):
+                del sys.modules[mod]
 
         from uniqc.task.config import load_originq_config
 
         with pytest.raises(ImportError, match="ORIGINQ_API_KEY"):
             load_originq_config()
+
+    def run_test_originq_config_yaml_fallback(self, monkeypatch, tmp_path):
+        """After #45, tokens are read from YAML config when env var is absent.
+
+        This test verifies the YAML fallback works correctly.
+        """
+        monkeypatch.delenv("ORIGINQ_API_KEY", raising=False)
+        config_dir = tmp_path / ".uniqc"
+        config_dir.mkdir()
+        yaml_config = config_dir / "uniqc.yml"
+        yaml_config.write_text(
+            "active_profile: default\n"
+            "default:\n"
+            "  originq:\n"
+            '    token: "yaml-test-token"\n'
+        )
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        for mod in list(sys.modules):
+            if mod.startswith("uniqc.task.config") or mod.startswith("uniqc.config"):
+                del sys.modules[mod]
+
+        from uniqc.task.config import load_originq_config
+
+        cfg = load_originq_config()
+        assert cfg["api_key"] == "yaml-test-token"
 
 
 # ---------------------------------------------------------------------------
